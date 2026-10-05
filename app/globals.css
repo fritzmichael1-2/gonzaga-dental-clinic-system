@@ -1,0 +1,169 @@
+@import "tailwindcss";
+
+/*
+ * GDCMAS — clinical palette. Light, high-contrast, low-glare: this UI is used
+ * across a full dental shift, so text is dark on a near-white ground rather
+ * than light-on-dark.
+ */
+:root {
+  --background: #f5f7fa;
+  --surface: #ffffff;
+  --surface-2: #f0f3f7;
+  --ink: #14212e;
+  --ink-soft: #4a5b6d;
+  --muted: #7b8b9c;
+  --line: #dbe2ea;
+  --line-strong: #c3cdd9;
+  --brand: #0e7c86;
+  --brand-dark: #0a5c64;
+  --brand-tint: #e2f4f5;
+  --ok: #1a7f4b;
+  --ok-tint: #e3f5ea;
+  --warn: #a86200;
+  --warn-tint: #fdf1dc;
+  --danger: #b3261e;
+  --danger-tint: #fce9e7;
+  --info: #1b5fa8;
+  --info-tint: #e6f0fa;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-brand: var(--brand);
+  --color-brand-dark: var(--brand-dark);
+  --color-brand-tint: var(--brand-tint);
+  --color-ok: var(--ok);
+  --color-ok-tint: var(--ok-tint);
+  --color-warn: var(--warn);
+  --color-warn-tint: var(--warn-tint);
+  --color-danger: var(--danger);
+  --color-danger-tint: var(--danger-tint);
+  --color-info: var(--info);
+  --color-info-tint: var(--info-tint);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+body {
+  background: var(--background);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--brand-tint);
+  color: var(--brand-dark);
+}
+
+/* Visible focus for keyboard users on a data-entry heavy app. */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* ---------- reusable component classes ---------- */
+
+/* min-h-11 == 44px, the minimum comfortable touch target. Front-desk staff
+   register patients on phones, so buttons are sized for fingers, not cursors. */
+@utility btn {
+  @apply inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50;
+}
+@utility btn-primary {
+  @apply btn bg-brand text-white hover:bg-brand-dark;
+}
+@utility btn-ghost {
+  @apply btn border border-line bg-surface text-ink hover:bg-surface-2;
+}
+/* Secondary: actionable but not the row's main event. Used for the one-tap
+   status transitions in the day list ("Check in", "Complete"), where a full
+   primary button on every row would out-shout the patient's name. */
+@utility btn-secondary {
+  @apply btn border border-brand/30 bg-brand/5 text-brand-dark hover:bg-brand/10;
+}
+@utility btn-danger {
+  @apply btn bg-danger text-white hover:brightness-95;
+}
+
+@layer components {
+  .panel {
+    @apply rounded-xl border border-line bg-surface;
+  }
+  .panel-header {
+    @apply flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4;
+  }
+  .panel-title {
+    @apply text-sm font-semibold tracking-wide text-ink;
+  }
+
+  /* Text input shared by every form on the site. */
+  .field {
+    @apply min-h-11 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink
+           placeholder:text-muted focus:border-brand focus:outline-none;
+  }
+  .label {
+    @apply mb-1 block text-xs font-semibold tracking-wide text-ink-soft uppercase;
+  }
+  .hint {
+    @apply text-xs text-muted;
+  }
+  .error-text {
+    @apply text-xs font-medium text-danger;
+  }
+
+  .table-base {
+    @apply w-full border-collapse text-sm;
+  }
+  .table-base th {
+    @apply border-b border-line px-4 py-2.5 text-left text-xs font-semibold tracking-wide text-muted uppercase;
+  }
+  .table-base td {
+    @apply border-b border-line px-4 py-3 align-middle;
+  }
+  .table-base tbody tr:hover {
+    @apply bg-surface-2;
+  }
+}
+
+/* Status badges. Declared with @utility (not @layer components) so the tone
+   variants below can @apply the base — Tailwind 4 only allows @apply against
+   real utilities. */
+@utility badge {
+  @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap;
+}
+@utility badge-ok {
+  @apply badge bg-ok-tint text-ok;
+}
+@utility badge-warn {
+  @apply badge bg-warn-tint text-warn;
+}
+@utility badge-danger {
+  @apply badge bg-danger-tint text-danger;
+}
+@utility badge-info {
+  @apply badge bg-info-tint text-info;
+}
+@utility badge-neutral {
+  @apply badge bg-surface-2 text-ink-soft;
+}
+@utility badge-muted {
+  @apply badge bg-line text-muted;
+}
+
+@media print {
+  /* The printable treatment chart is the replacement for the index card. */
+  .no-print {
+    display: none !important;
+  }
+  .panel {
+    border-color: #999;
+    break-inside: avoid;
+  }
+}

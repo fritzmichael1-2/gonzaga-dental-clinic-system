@@ -30,16 +30,33 @@ function previewPersona(): Session {
 
   const unassigned = role === "secretary" && process.env.GDCMAS_PREVIEW_UNASSIGNED === "1";
 
-  // The name and email change with the role so it is obvious whose navigation
-  // and permissions are on screen; the sidebar shows them on every page.
+  // Identity is taken from the matching row in `previewStaff`
+  // (lib/preview/fixtures.ts) — including its id. The id matters: the Staff
+  // page marks a row "you" by comparing `staff.id` to `session.userId`, and
+  // refuses to let you deactivate yourself. A single hardcoded id meant
+  // previewing as admin marked the *dentist's* row as self, so the sidebar
+  // read "Clinic Administrator" while the page treated Dr. Gonzaga as the
+  // signed-in user.
   const identity = {
-    admin: { fullName: "Dr. Maria Gonzaga", email: "admin@gdcmas.test" },
-    dentist: { fullName: "Dr. Maria Gonzaga", email: "dr.gonzaga@gdcmas.test" },
-    secretary: { fullName: "Ana Reyes", email: "ana.reyes@gdcmas.test" },
+    admin: {
+      userId: "44444444-4444-4444-8444-444444444444",
+      fullName: "Clinic Administrator",
+      email: "admin@gdcmas.test",
+    },
+    dentist: {
+      userId: "11111111-1111-4111-8111-111111111111",
+      fullName: "Dr. Lezly S. Gonzaga",
+      email: "lezly.gonzaga@gdcmas.test",
+    },
+    secretary: {
+      userId: "22222222-2222-4222-8222-222222222222",
+      fullName: "Ana Dela Cruz",
+      email: "a.delacruz@gdcmas.test",
+    },
   }[role];
 
   return {
-    userId: "11111111-1111-4111-8111-111111111111",
+    userId: identity.userId,
     email: identity.email,
     fullName: identity.fullName,
     role,

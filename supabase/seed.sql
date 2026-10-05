@@ -15,7 +15,7 @@
 -- If the clinic decides NOT to appoint an administrator (the plan calls the
 -- admin role "proposed, if assigned"), promote the dentist instead:
 --
---   select public.promote_to_admin('dr.gonzaga@example.com', 'dentist');
+--   select public.promote_to_admin('lezly.gonzaga@example.com', 'dentist');
 --
 -- TODO(CLINIC): confirm the dentist's real sign-in email and the secretary's.
 -- The branch addresses/phones below are placeholders.

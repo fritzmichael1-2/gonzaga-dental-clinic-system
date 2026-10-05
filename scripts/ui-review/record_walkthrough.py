@@ -24,6 +24,30 @@ from playwright.sync_api import sync_playwright  # noqa: E402
 BASE = os.environ.get("GDCMAS_BASE_URL", "http://localhost:3000").rstrip("/")
 VERIFY = "--verify" in sys.argv
 
+# Human label the app renders for each preview role, used to assert the file is
+# named for the role actually on screen.
+ROLE_LABEL = {"admin": "Administrator", "dentist": "Dentist", "secretary": "Secretary"}
+
+
+def preview_role() -> str:
+    """Role the dev server is previewing.
+
+    Must read .env.local, not just os.environ: Next loads that file into its own
+    process, so a shell that never exported the variable still had the app
+    previewing as secretary. Keying the output filename off os.environ alone
+    wrote the secretary recording over the dentist one.
+    """
+    raw = os.environ.get("GDCMAS_PREVIEW_ROLE")
+    if not raw:
+        env = Path(__file__).resolve().parents[2] / ".env.local"
+        if env.exists():
+            for line in env.read_text().splitlines():
+                line = line.strip()
+                if line.startswith("GDCMAS_PREVIEW_ROLE"):
+                    raw = line.split("=", 1)[1].strip().strip("\"'")
+                    break
+    return (raw or "dentist").strip() or "dentist"
+
 OUT_DIR = Path(__file__).resolve().parents[2] / "docs"
 RAW_DIR = Path("/tmp/opencode/walkthrough-raw")
 SIZE = {"width": 1280, "height": 720}
@@ -105,7 +129,7 @@ def run() -> None:
     # One file per persona: a secretary recording cannot contain the tooth
     # picker at all, so a single canonical name would silently misrepresent
     # whichever role happened to be configured last.
-    role = (os.environ.get("GDCMAS_PREVIEW_ROLE") or "dentist").strip() or "dentist"
+    role = preview_role()
     webm_target = OUT_DIR / f"GDCMAS-Walkthrough-Video-{role}.webm"
 
     with sync_playwright() as pw:
@@ -127,6 +151,15 @@ def run() -> None:
 
         # 1. Entry point
         go("/login")
+        go("/")
+        shown = page.eval_on_selector_all("aside p", "els => els.map(e => e.textContent.trim())")
+        expected = ROLE_LABEL.get(role)
+        if expected and expected not in shown:
+            raise SystemExit(
+                f"previewing as {role!r} but the sidebar shows {shown[:2]!r}; "
+                f"expected {expected!r}. Refusing to label the file wrongly."
+            )
+        print(f"  persona confirmed on screen: {shown[0] if shown else '(sidebar empty)'}")
         add_caption(page, "Gonzaga Dental Clinic · Staff Walkthrough",
                    "Staff sign-in. Preview mode uses fabricated data and rejects all writes.")
         page.wait_for_timeout(2600)
@@ -361,5 +394,4 @@ if __name__ == "__main__":
         print("all captions rendered inside the frame")
     else:
         run()
-        role = (os.environ.get("GDCMAS_PREVIEW_ROLE") or "dentist").strip() or "dentist"
-        to_mp4(OUT_DIR / f"GDCMAS-Walkthrough-Video-{role}.webm")
+        to_mp4(OUT_DIR / f"GDCMAS-Walkthrough-Video-{preview_role()}.webm")

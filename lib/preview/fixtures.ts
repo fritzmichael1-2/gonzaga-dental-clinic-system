@@ -67,8 +67,8 @@ const SECOND = previewBranches[1].id;
 export const previewStaff = [
   {
     id: "11111111-1111-4111-8111-111111111111",
-    email: "dr.gonzaga@gdcmas.test",
-    full_name: "Dr. Maria Gonzaga",
+    email: "lezly.gonzaga@gdcmas.test",
+    full_name: "Dr. Lezly S. Gonzaga",
     role: "dentist",
     branch_id: MAIN,
     is_active: true,

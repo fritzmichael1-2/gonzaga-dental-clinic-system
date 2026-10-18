@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _common import launch  # noqa: E402
+from _common import clinic_today, launch  # noqa: E402
 from playwright.sync_api import sync_playwright  # noqa: E402
 
 BASE = os.environ.get("GDCMAS_BASE_URL", "http://localhost:3000").rstrip("/")
@@ -354,14 +354,33 @@ def run() -> None:
             print("  ! no primary status button found")
 
         add_caption(page, "Appointments",
-                   "That is the front-desk workflow: find the patient, check their details, move the appointment along."
-                   + (" The dentist does the charting." if not teeth else ""))
+                    "That is the front-desk workflow: find the patient, check their details, move the appointment along."
+                    + (" The dentist does the charting." if not teeth else ""))
         page.wait_for_timeout(3400)
+        clear_caption(page)
+
+        # 11. Public booking — the one surface with no account at all.
+        go(f"/book?date={clinic_today()}")
+        add_caption(page, "Patient booking",
+                    "The one page with no sign-in: a patient picks a branch, a date, and an open time.")
+        page.wait_for_timeout(3200)
+        available = page.query_selector("button[title='Available']")
+        if available:
+            available.click()
+            page.wait_for_timeout(1400)
+        add_caption(page, "Patient booking",
+                    "No account and no record access. The request arrives at the front desk as pending, for the clinic to confirm.")
+        page.wait_for_timeout(3600)
         clear_caption(page)
 
         ctx.close()
         browser.close()
 
+    # --verify records nothing on purpose, so the file check below only applies
+    # to a real recording; without this guard the verified run always ended by
+    # complaining that no video existed.
+    if VERIFY:
+        return
     produced = sorted(RAW_DIR.glob("*.webm"), key=lambda p: p.stat().st_mtime)
     if not produced:
         raise SystemExit("playwright produced no video")

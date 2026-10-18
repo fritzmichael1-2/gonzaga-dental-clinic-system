@@ -213,6 +213,16 @@ reset role;
 -- appointment is created by the dentist (clinic-wide) instead.
 set role authenticated;
 set request.jwt.claim.sub = :'DENTIST';
+-- The cross-branch guard (section 22) refuses a SECOND booking while the
+-- patient still has a live appointment at MAIN, so settle that patient's MAIN
+-- rows first. This section is about record *visibility*, not timing.
+update public.appointments set status = 'completed'
+where patient_id = (
+        select id from public.patients
+        where branch_id = :MAIN_BRANCH order by created_at limit 1
+      )
+  and status in ('requested', 'scheduled', 'confirmed');
+
 insert into public.appointments (patient_id, branch_id, dentist_id, starts_at, ends_at, status)
 select id, :SECOND_BRANCH, :'DENTIST', '2026-03-11 09:00:00+00', '2026-03-11 09:30:00+00', 'scheduled'
 from public.patients where branch_id = :MAIN_BRANCH order by created_at limit 1;
@@ -305,6 +315,67 @@ set role authenticated;
 set request.jwt.claim.sub = :'SECRETARY';
 select count(*) as secretary_rpc_ok from public.find_potential_duplicates('Dela Cruz', 'Juan', null);
 reset role;
+
+\echo ''
+\echo '== 22. CROSS-BRANCH: a pending appointment elsewhere blocks a new booking =='
+-- A fresh patient (no history) so the guard, not an overlap constraint, is
+-- what fires below.
+set role authenticated;
+set request.jwt.claim.sub = :'DENTIST';
+insert into public.patients (last_name, first_name, birthdate, branch_id)
+values ('Cruz', 'Lina', '1990-01-05', :MAIN_BRANCH)
+returning id as xbranch_patient \gset
+
+-- A live appointment at MAIN.
+insert into public.appointments (patient_id, branch_id, starts_at, ends_at, status)
+values (:'xbranch_patient', :MAIN_BRANCH, '2026-04-01 09:00:00+08', '2026-04-01 09:30:00+08', 'scheduled');
+
+-- Booking at the OTHER branch must be refused by the trigger.
+insert into public.appointments (patient_id, branch_id, starts_at, ends_at, status)
+values (:'xbranch_patient', :SECOND_BRANCH, '2026-04-02 09:00:00+08', '2026-04-02 09:30:00+08', 'scheduled');
+-- expect ERROR: has a pending appointment at Main Branch that must be settled first
+
+-- Settling the MAIN appointment (completed) frees cross-branch booking.
+update public.appointments set status = 'completed'
+where patient_id = :'xbranch_patient' and branch_id = :MAIN_BRANCH;
+
+insert into public.appointments (patient_id, branch_id, starts_at, ends_at, status)
+values (:'xbranch_patient', :SECOND_BRANCH, '2026-04-02 09:00:00+08', '2026-04-02 09:30:00+08', 'scheduled');
+
+select count(*) as cross_branch_after_settle
+from public.appointments where patient_id = :'xbranch_patient';   -- expect 2
+reset role;
+
+\echo ''
+\echo '== 23. PUBLIC RPCs: anon can view occupancy and self-book, but read no tables =='
+-- Next Monday: in the future (so the function's "already passed" guard passes)
+-- and a day the clinic is open.
+select to_char((date_trunc('week', now()) + interval '7 days')::date, 'YYYY-MM-DD') as pub_date \gset
+-- Resolve the branch id as a literal: under `anon`, RLS hides the branches
+-- table, so passing the `(select id ...)` subquery would send null.
+select id as main_id from public.branches where code = 'MAIN' \gset
+set role anon;
+set request.jwt.claim.sub = '';   -- clear any claim left by an earlier section
+select count(*) as anon_public_branches from public.public_branches();   -- expect 2
+select (public.public_branch_availability(:'main_id'::uuid, :'pub_date'::date) ->> 'ok') as avail_ok;      -- expect true
+select (public.public_branch_availability(:'main_id'::uuid, :'pub_date'::date) ->> 'open') as avail_open;  -- expect true
+select public.public_request_appointment(
+         'Bautista', 'Ana', date '1994-02-02', '09170000009',
+         :'main_id'::uuid, :'pub_date'::date, '10:00', 30, 'Consultation'
+       ) ->> 'ok' as public_booking_ok;                                  -- expect true
+-- The whole point: anon still cannot read the tables it just wrote through.
+select count(*) as anon_still_no_patients from public.patients;          -- expect 0
+reset role;
+
+-- The request landed, as staff can see.
+set role authenticated;
+set request.jwt.claim.sub = :'DENTIST';
+select a.status as request_status, a.reason as request_reason
+from public.appointments a
+where a.branch_id = :'main_id'::uuid
+  and a.starts_at = (:'pub_date'::date + time '10:00') at time zone 'Asia/Manila';  -- expect requested / Consultation
+reset role;
+set request.jwt.claim.sub = '';
 
 \echo ''
 \echo '== RESULT: reached the end of the script =='

@@ -447,6 +447,64 @@ end;
 $$;
 
 -- =====================================================================
+-- CROSS-BRANCH PENDING GUARD
+--
+-- A patient may only hold live appointments at one branch at a time. If a
+-- patient already has a pending (requested/scheduled/confirmed) appointment at
+-- another branch, a new appointment for them is refused until that one is
+-- settled (completed, cancelled, or marked no-show). This stops a patient
+-- being booked into both desks at once and leaving one slot stranded.
+--
+-- Enforced in the database rather than the UI so every writer — the staff
+-- booking form and the public self-booking RPC — is covered by the same rule.
+--
+-- SECURITY DEFINER: the check has to see the patient's appointments at the
+-- other branch even when the caller is a branch-scoped secretary (or anon
+-- through the public RPC) whom RLS would hide them from. Mirrors the reasoning
+-- behind public.can_access_patient() below.
+-- =====================================================================
+create or replace function public.enforce_cross_branch_pending()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  conflicting_branch text;
+begin
+  -- Only live rows block. A row moving to completed/cancelled/no_show must
+  -- always pass so the pending appointment can actually be settled.
+  if new.status not in ('requested', 'scheduled', 'confirmed') then
+    return new;
+  end if;
+
+  select b.name
+    into conflicting_branch
+  from public.appointments a
+  join public.branches b on b.id = a.branch_id
+  where a.patient_id = new.patient_id
+    and a.branch_id <> new.branch_id
+    and a.status in ('requested', 'scheduled', 'confirmed')
+    and a.id <> new.id
+  limit 1;
+
+  if conflicting_branch is not null then
+    raise exception
+      'This patient has a pending appointment at % that must be settled first.',
+      conflicting_branch
+      using errcode = 'P0001';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists appointments_cross_branch_pending on public.appointments;
+create trigger appointments_cross_branch_pending
+  before insert or update of patient_id, branch_id on public.appointments
+  for each row execute procedure public.enforce_cross_branch_pending();
+
+-- =====================================================================
 -- TREATMENT RECORDS  (Scope 4: dental treatment history)
 -- Replaces the index cards patients used to photograph for their own copy.
 -- Scope 4 problem 6 is closed by giving each visit a structured row that is
@@ -725,8 +783,206 @@ create policy "audit_select_admin" on public.audit_logs
   for select using (public.is_admin());
 
 -- =====================================================================
+-- PUBLIC (PATIENT-FACING) RPCs
+--
+-- The patient booking page is unauthenticated. Rather than grant anon any
+-- access to the tables, the whole public surface is these three SECURITY
+-- DEFINER functions. They expose only what a walk-in patient already knows —
+-- which branches exist, which times are free, and whether their own booking
+-- was accepted — and never return a patient name, contact, or reason.
+--
+-- TODO(CLINIC): confirm that publishing per-branch availability is acceptable,
+-- and add rate limiting / bot protection before going live. Self-booking
+-- matches an existing patient on name + birthdate; that match is deliberately
+-- conservative (more than one hit is refused rather than guessed).
+-- =====================================================================
+create or replace function public.public_branches()
+returns table (id uuid, name text)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select b.id, b.name
+  from public.branches b
+  where b.is_active
+  order by b.name
+$$;
+
+create or replace function public.public_branch_availability(p_branch uuid, p_date date)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+stable
+as $$
+declare
+  v_branch   record;
+  v_hours    jsonb;
+  v_slot     integer;
+  v_day_end  timestamptz;
+  v_busy     jsonb;
+begin
+  select b.id, b.name, b.is_active into v_branch
+  from public.branches b where b.id = p_branch;
+  if not found or not v_branch.is_active then
+    return jsonb_build_object('ok', false, 'message', 'Unknown branch.');
+  end if;
+
+  select cs.opening_hours, cs.default_slot_min into v_hours, v_slot
+  from public.clinic_settings cs where cs.id = true;
+  v_hours := v_hours -> (extract(dow from p_date))::int::text;
+  v_slot  := coalesce(v_slot, 30);
+
+  v_day_end := (p_date::timestamp at time zone 'Asia/Manila') + interval '1 day';
+
+  -- Occupancy only: the shape of the free/occupied grid, never who is booked.
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'start', to_char(a.starts_at at time zone 'Asia/Manila', 'HH24:MI'),
+           'end',   to_char(a.ends_at   at time zone 'Asia/Manila', 'HH24:MI')
+         ) order by a.starts_at), '[]'::jsonb)
+    into v_busy
+  from public.appointments a
+  where a.branch_id = p_branch
+    and a.status in ('requested', 'scheduled', 'confirmed')
+    and a.starts_at < v_day_end
+    and a.ends_at   > (p_date::timestamp at time zone 'Asia/Manila');
+
+  return jsonb_build_object(
+    'ok', true,
+    'branch', jsonb_build_object('id', v_branch.id, 'name', v_branch.name),
+    'date', to_char(p_date, 'YYYY-MM-DD'),
+    'open', v_hours is not null,
+    'opensAt', case when v_hours is not null then v_hours ->> 0 end,
+    'closesAt', case when v_hours is not null then v_hours ->> 1 end,
+    'slotMin', v_slot,
+    'busy', v_busy
+  );
+end;
+$$;
+
+create or replace function public.public_request_appointment(
+  p_last_name  text,
+  p_first_name text,
+  p_birthdate  date,
+  p_contact    text,
+  p_branch     uuid,
+  p_date       date,
+  p_time       text,
+  p_duration   integer default 30,
+  p_reason     text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_branch    record;
+  v_hours     jsonb;
+  v_slot      integer := 30;
+  v_start     timestamptz;
+  v_patient   uuid;
+  v_matches   integer;
+  v_new       boolean := false;
+begin
+  if coalesce(btrim(p_last_name), '') = ''
+     or coalesce(btrim(p_first_name), '') = '' then
+    return jsonb_build_object('ok', false, 'message', 'Please enter your first and last name.');
+  end if;
+  if p_birthdate is null then
+    return jsonb_build_object('ok', false, 'message', 'Please enter your date of birth.');
+  end if;
+  if coalesce(btrim(p_contact), '') = '' then
+    return jsonb_build_object('ok', false, 'message', 'Please enter a contact number.');
+  end if;
+  if p_time !~ '^\d{2}:\d{2}$' then
+    return jsonb_build_object('ok', false, 'message', 'Choose a time slot.');
+  end if;
+
+  select b.id, b.name, b.is_active into v_branch
+  from public.branches b where b.id = p_branch;
+  if not found or not v_branch.is_active then
+    return jsonb_build_object('ok', false, 'message', 'Unknown branch.');
+  end if;
+
+  select cs.opening_hours, cs.default_slot_min into v_hours, v_slot
+  from public.clinic_settings cs where cs.id = true;
+  v_slot  := coalesce(v_slot, 30);
+  v_hours := v_hours -> (extract(dow from p_date))::int::text;
+
+  if v_hours is null then
+    return jsonb_build_object('ok', false, 'message', 'The clinic is closed on that day.');
+  end if;
+  if p_time::time < (v_hours ->> 0)::time
+     or (p_time::time + make_interval(mins => p_duration)) > (v_hours ->> 1)::time then
+    return jsonb_build_object('ok', false, 'message', 'That time is outside the clinic hours.');
+  end if;
+  if ((extract(epoch from (p_time::time - (v_hours ->> 0)::time)) / 60)::int % v_slot) <> 0 then
+    return jsonb_build_object('ok', false, 'message', 'Choose one of the listed time slots.');
+  end if;
+
+  v_start := (p_date::timestamp + p_time::time) at time zone 'Asia/Manila';
+  if v_start <= now() then
+    return jsonb_build_object('ok', false, 'message', 'That time has already passed.');
+  end if;
+
+  -- Resolve an existing record (open self-registration: create one if none).
+  -- Two matches are ambiguous, so the request is refused rather than guessed.
+  select count(*) into v_matches
+  from public.patients p
+  where lower(p.last_name)  = lower(btrim(p_last_name))
+    and lower(p.first_name) = lower(btrim(p_first_name))
+    and p.birthdate = p_birthdate
+    and p.status = 'active';
+
+  if v_matches > 1 then
+    return jsonb_build_object('ok', false,
+      'message', 'More than one record matches those details. Please contact the clinic to book.');
+  elsif v_matches = 1 then
+    select p.id into v_patient
+    from public.patients p
+    where lower(p.last_name)  = lower(btrim(p_last_name))
+      and lower(p.first_name) = lower(btrim(p_first_name))
+      and p.birthdate = p_birthdate
+      and p.status = 'active'
+    limit 1;
+  else
+    insert into public.patients (last_name, first_name, birthdate, contact_no, branch_id)
+    values (btrim(p_last_name), btrim(p_first_name), p_birthdate, btrim(p_contact), p_branch)
+    returning id into v_patient;
+    v_new := true;
+  end if;
+
+  insert into public.appointments (patient_id, branch_id, starts_at, ends_at, status, reason)
+  values (v_patient, p_branch, v_start,
+          v_start + make_interval(mins => p_duration), 'requested', nullif(btrim(p_reason), ''));
+
+  return jsonb_build_object(
+    'ok', true,
+    'message', 'Request received. The clinic will confirm your appointment.',
+    'newPatient', v_new
+  );
+
+exception
+  -- Slot taken by someone else between render and submit.
+  when exclusion_violation then
+    return jsonb_build_object('ok', false, 'message', 'That slot was just taken. Please choose another time.');
+  -- Same patient, same time.
+  when unique_violation then
+    return jsonb_build_object('ok', false, 'message', 'There is already an appointment at that time.');
+  -- The cross-branch pending guard (and any other deliberate raise_exception).
+  when raise_exception then
+    return jsonb_build_object('ok', false, 'message', SQLERRM);
+  when others then
+    return jsonb_build_object('ok', false, 'message', 'Could not book that appointment. Please try again or call the clinic.');
+end;
+$$;
+
+-- =====================================================================
 -- GRANTS
--- anon gets nothing: this is a staff-only system with no public surface.
+-- anon gets no table access: the only public surface is the three
+-- public_* functions above, which are SECURITY DEFINER.
 -- =====================================================================
 grant usage on schema public to authenticated;
 
@@ -776,6 +1032,18 @@ grant execute on function public.staff_branch_id()    to anon, authenticated;
 grant execute on function public.is_clinic_wide()     to anon, authenticated;
 grant execute on function public.can_access_branch(uuid)  to anon, authenticated;
 grant execute on function public.can_access_patient(uuid, uuid) to anon, authenticated;
+
+-- The public booking surface. Execute is revoked from PUBLIC first (Postgres
+-- grants it by default) and then given only to anon, since the point is that a
+-- signed-out patient may call exactly these three functions and nothing else.
+-- The cross-branch trigger function is NOT callable directly.
+revoke execute on function public.enforce_cross_branch_pending() from public;
+revoke execute on function public.public_branches() from public;
+revoke execute on function public.public_branch_availability(uuid, date) from public;
+revoke execute on function public.public_request_appointment(text, text, date, text, uuid, date, text, integer, text) from public;
+grant execute on function public.public_branches() to anon, authenticated;
+grant execute on function public.public_branch_availability(uuid, date) to anon, authenticated;
+grant execute on function public.public_request_appointment(text, text, date, text, uuid, date, text, integer, text) to anon, authenticated;
 
 -- Keep the patient_no sequence moving and expose next-value to the DB only.
 grant usage, select on sequence public.patient_no_seq to authenticated;

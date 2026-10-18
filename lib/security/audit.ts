@@ -52,6 +52,7 @@ export const AUDIT = {
   appointmentCreated: "appointment.created",
   appointmentUpdated: "appointment.updated",
   appointmentCancelled: "appointment.cancelled",
+  publicAppointmentRequested: "appointment.public_requested",
   bookingRejected: "appointment.booking_rejected",
   scheduleViewed: "schedule.viewed",
   staffInvited: "staff.invited",

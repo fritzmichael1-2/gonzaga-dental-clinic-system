@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { ReactNode } from "react";
 import {
   Building2,
@@ -6,7 +7,6 @@ import {
   DatabaseBackup,
   LayoutDashboard,
   ScrollText,
-  Toothbrush,
   UserCog,
   Users,
 } from "lucide-react";
@@ -109,7 +109,13 @@ function Brand({ compact = false }: { compact?: boolean }) {
         compact ? "min-h-11 px-3" : "border-b px-5 py-4"
       }`}
     >
-      <Toothbrush size={compact ? 18 : 20} className="text-brand" aria-hidden />
+      <Image
+        src="/clinic-logo.png"
+        alt=""
+        width={compact ? 20 : 26}
+        height={compact ? 20 : 26}
+        className="shrink-0"
+      />
       <span className="text-sm font-semibold">
         {compact ? "GDCMAS" : "Gonzaga Dental Clinic"}
       </span>

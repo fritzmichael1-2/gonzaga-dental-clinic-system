@@ -12,7 +12,7 @@ import {
 } from "@/lib/security/validators";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { localIso, validateBooking } from "@/lib/clinical/schedule";
-import type { AppointmentStatus } from "@/lib/types";
+import { LIVE_APPOINTMENT_STATUSES, type AppointmentStatus } from "@/lib/types";
 
 /**
  * Shape returned by every mutation for `useActionState`.
@@ -513,6 +513,34 @@ export async function createAppointment(
     return { ok: false, message: verdict.reason };
   }
 
+  // Cross-branch rule: a patient holding a live appointment at another branch
+  // must settle that one first. The database trigger
+  // (appointments_cross_branch_pending) is the guarantee; this query exists so
+  // the user gets a message that names the other branch rather than a raw
+  // Postgres error.
+  const { data: otherPending } = await supabase
+    .from("appointments")
+    .select("id, branches ( name )")
+    .eq("patient_id", a.patient_id)
+    .neq("branch_id", a.branch_id)
+    .in("status", LIVE_APPOINTMENT_STATUSES)
+    .limit(1);
+
+  if (otherPending && otherPending.length > 0) {
+    const embed = otherPending[0].branches;
+    const otherName =
+      (Array.isArray(embed) ? embed[0] : embed)?.name ?? "another branch";
+    const message = `This patient has a pending appointment at ${otherName} that must be settled first.`;
+    await auditLog({
+      action: AUDIT.bookingRejected,
+      userId: session.userId,
+      email: session.email,
+      entityType: "appointment",
+      details: { reason: "cross_branch_pending" },
+    });
+    return { ok: false, message };
+  }
+
   const startsAt = localIso(a.date, a.time);
   const endsAt = new Date(
     new Date(startsAt).getTime() + a.duration_min * 60_000
@@ -544,6 +572,11 @@ export async function createAppointment(
         ok: false,
         message: "This patient already has an appointment at that time.",
       };
+    }
+    // P0001 = our cross-branch pending guard raised from the trigger. Its
+    // message already names the other branch, so pass it straight through.
+    if (error.code === "P0001") {
+      return { ok: false, message: error.message };
     }
     return { ok: false, message: `Could not book: ${error.message}` };
   }

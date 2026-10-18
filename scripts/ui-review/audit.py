@@ -15,7 +15,7 @@ import re
 from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from _common import BASE, REPO, SHOTS, launch  # noqa: E402
+from _common import BASE, REPO, SHOTS, clinic_today, launch  # noqa: E402
 
 PAT = "0001-0000-4000-8000-000000000001"
 
@@ -35,6 +35,7 @@ PAGES = [
     ("staff", "/staff", 1440),
     ("audit", "/audit-log", 1440),
     ("backups", "/backups", 1440),
+    ("book", f"/book?date={clinic_today()}", 1440),
 ]
 
 # Things that are fine to find and must not be reported.
@@ -102,8 +103,9 @@ SCRIPT = """
     if (t.querySelector('thead') && !t.querySelector('tbody tr')) out.emptyTables++;
   }
 
-  // 8. Images without alt text.
-  out.imgsNoAlt = [...document.querySelectorAll('img')].filter(i => !i.alt).length;
+  // 8. Images with no alt attribute at all. alt="" is the correct way to mark
+  //    a decorative image, so this checks for the attribute, not its content.
+  out.imgsNoAlt = [...document.querySelectorAll('img')].filter(i => !i.hasAttribute('alt')).length;
 
   // 9. Text visually clipped by overflow:hidden without an ellipsis.
   for (const el of document.querySelectorAll('td, p, span, h1, h2, h3')) {

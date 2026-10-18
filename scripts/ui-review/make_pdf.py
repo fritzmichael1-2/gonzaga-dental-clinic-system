@@ -109,18 +109,30 @@ PAGES = [
      ["A clinic holding patient records needs a recoverable copy and a way to take one deliberately.",
       "The log records what was exported, by whom and when, so leaving the building with a backup is itself traceable.",
       "Real scheduled backups are a deployment decision and are not automated by this application."]),
-    ("17-mobile-dashboard.png", "Mobile: dashboard",
+    ("17-book.png", "Public booking",
+     "The one page a patient can reach with no account at all.",
+     ["Nothing on this page can read a patient record: the database grants the anon role no table access, so it only ever sees branch names and which slots are occupied.",
+      "A submission lands as a request for the front desk to confirm — the page says plainly that this is not yet a booked appointment.",
+      "Struck-through times are already booked or have passed; the grid follows the same slot rules the staff form uses.",
+      "The database matches an existing patient on name and birthdate, or opens a new record. Two matches are refused rather than guessed.",
+      "Deliberately unfinished before go-live: rate limiting and bot protection are still needed before this page faces the internet."]),
+    ("18-mobile-dashboard.png", "Mobile: dashboard",
      "The dashboard at phone width.",
      ["The sidebar collapses to a horizontal scrolling nav so navigation survives a narrow screen without hiding it behind a menu.",
       "Interactive controls are at least 44px tall, the minimum comfortable touch target, because front-desk staff work on phones."]),
-    ("18-mobile-patients.png", "Mobile: patient directory",
+    ("19-mobile-patients.png", "Mobile: patient directory",
      "The patient list at phone width.",
      ["The table remains readable by scrolling horizontally within the table, so columns are never silently dropped.",
       "Patient names are comfortably tappable rather than bare inline text."]),
-    ("19-mobile-branches.png", "Both branches on a phone",
+    ("20-mobile-branches.png", "Both branches on a phone",
      "The same cross-branch comparison, on the screen most staff actually carry.",
      ["Each branch becomes its own stacked block, so the counts, schedule, and recent treatments are read by scrolling rather than side by side.",
       "The branch name and open/closed badge stay at the top of each block, which is the part that has to be legible at a glance before opening anything else."]),
+    ("21-mobile-book.png", "Booking on a phone",
+     "The public booking page at the width most patients will actually use.",
+     ["Slot times wrap into a tappable grid, with booked and passed times struck through rather than hidden, so the day's shape stays readable.",
+      "Every control is checked against the 24px WCAG minimum target size on this screen, because a patient books on a phone, not a front desk.",
+      "The form asks only for what the clinic needs to contact the patient — no account, no password, no record to browse."]),
 ]
 
 CSS = """
@@ -133,8 +145,8 @@ body { margin: 0; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 .page:last-child { page-break-after: auto; }
 
 .head { display: flex; align-items: baseline; gap: 8px;
-        border-bottom: 2px solid #0f766e; padding-bottom: 5px; margin-bottom: 9px; }
-.num { font-size: 10pt; font-weight: 700; color: #0f766e; letter-spacing: .06em; }
+        border-bottom: 2px solid #4a7a5c; padding-bottom: 5px; margin-bottom: 9px; }
+.num { font-size: 10pt; font-weight: 700; color: #4a7a5c; letter-spacing: .06em; }
 .title { font-size: 16pt; font-weight: 700; margin: 0; }
 .role { margin-left: auto; font-size: 8pt; color: #78716c; text-transform: uppercase;
         letter-spacing: .08em; }
@@ -142,10 +154,10 @@ body { margin: 0; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 .body { display: flex; gap: 9mm; flex: 1; min-height: 0; }
 .text { width: 66mm; flex-shrink: 0; }
 .purpose { font-size: 9.5pt; line-height: 1.45; color: #44403c; margin: 0 0 7px;
-           padding: 6px 8px; background: #f0fdfa; border-left: 3px solid #0f766e; }
+           padding: 6px 8px; background: #eaf3ec; border-left: 3px solid #4a7a5c; }
 ul { margin: 0; padding-left: 13px; }
 li { font-size: 8.4pt; line-height: 1.42; margin-bottom: 6px; color: #292524; }
-li::marker { color: #0f766e; }
+li::marker { color: #4a7a5c; }
 
 .shot { flex: 1; min-width: 0; display: flex; align-items: flex-start;
         justify-content: center; border: 1px solid #e7e5e4; background: #fafaf9;
@@ -178,8 +190,8 @@ def build_html():
     # screen is added, and a number-keyed map silently starts labelling the wrong
     # page after a renumber.
     ADMIN_ONLY = {"14-staff", "15-audit-log", "16-backups"}
-    DENTIST_ADMIN = {"03-branches", "19-mobile-branches"}
-    PUBLIC = {"01-sign-in"}
+    DENTIST_ADMIN = {"03-branches", "20-mobile-branches"}
+    PUBLIC = {"01-sign-in", "17-book", "21-mobile-book"}
     parts = []
     for i, (f, title, purpose, bullets) in enumerate(PAGES, 1):
         slug = f.rsplit(".", 1)[0]
@@ -214,7 +226,7 @@ def build_html():
   <h1>Gonzaga Dental Clinic<br>Management System</h1>
   <p class="sub">UI/UX walkthrough &mdash; every screen, with notes on what it does and why it is built that way.</p>
   <div class="meta">
-    <strong>Scope</strong> patient records, appointments, consent, treatments, staff and audit<br>
+    <strong>Scope</strong> patient records, appointments, consent, treatments, staff, audit and public booking<br>
     <strong>Roles</strong> dentist, secretary, admin &mdash; patients are records, not user accounts<br>
     <strong>Screens documented</strong> {len(PAGES)}<br>
     <strong>Data in these images</strong> fabricated samples, generated locally

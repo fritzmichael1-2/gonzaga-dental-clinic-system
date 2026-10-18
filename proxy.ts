@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { isPreviewMode } from "@/lib/preview";
 
 /**
- * Every route except /login requires a session.
+ * Every route except the public ones requires a session.
  *
- * GDCMAS is a staff-only back-office app with no public pages, so the whole
- * tree is protected rather than a list of prefixes.
+ * GDCMAS is a staff-only back-office app. `/book` is the single public
+ * surface — an unauthenticated patient booking page that talks only to the
+ * anon-callable public_* RPCs — so the rest of the tree is protected rather
+ * than a list of prefixes.
  *
  * NOTE: this is a fast-path redirect only, not the security boundary. Role and
  * `is_active` checks happen in lib/security/session.ts against the `staff`
@@ -14,13 +17,17 @@ import { createServerClient } from "@supabase/ssr";
  * client-supplied role data.
  */
 
-const PUBLIC_PATHS = ["/login"];
+const PUBLIC_PATHS = ["/login", "/book"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Missing env vars short-circuit to allow, so `next build` and a fresh clone
   // do not crash before .env.local exists.
+  if (isPreviewMode()) {
+    return NextResponse.next();
+  }
+
   if (
     !process.env.NEXT_PUBLIC_SUPABASE_URL ||
     !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY

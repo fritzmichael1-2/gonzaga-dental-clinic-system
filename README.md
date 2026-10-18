@@ -18,12 +18,16 @@ marked `TODO(CLINIC)` and must be confirmed by the clinic itself.
 | Patients | Registration/intake, duplicate detection before save, editable demographics, allergies alert |
 | Consent | Versioned consent text captured per patient, with who recorded it |
 | Treatment | FDI tooth chart, procedure codes, surfaces, who performed it and when |
-| Appointments | Per-branch day view, slot generation from branch hours, live status changes |
+| Appointments | Per-branch day view, slot generation from branch hours, live status changes, cross-branch pending guard |
+| Patient booking | Public `/book` page: branch + date availability, self-booking captured as `requested` |
 | Branches | Dentist/admin overview: each branch's counts, schedule, recent treatments, and open/closed status side by side |
 | Staff | Roles (`dentist` / `secretary` / `admin`), activation, branch assignment |
 | Governance | Append-only audit log, backup log |
 
-Patients are **records, not logins.** Only clinic staff get accounts.
+Patients are **records, not logins.** Only clinic staff get accounts. A patient
+can *request* an appointment from the public `/book` page (see
+[Public patient booking](#public-patient-booking)), but that page has no account,
+no session, and no read access to any patient record.
 
 ## Stack
 
@@ -170,14 +174,15 @@ need a database:
 
 | Artefact | Command | Output |
 | --- | --- | --- |
-| Screenshot set | `npm run ui:shots` | 19 PNGs in `.ui-review/` |
+| Screenshot set | `npm run ui:shots` | 21 PNGs in `.ui-review/` |
 | Layout audit | `npm run ui:audit` | `audit.json`, fails on overflow or page errors |
 | PDF walkthrough | `npm run ui:pdf` | `docs/GDCMAS-UI-UX-Walkthrough.pdf` |
 | Slide deck | `python3 scripts/ui-review/make_pptx.py` | `docs/GDCMAS-Project-Walkthrough.pptx` |
 | Screen video | `python3 scripts/ui-review/record_walkthrough.py` | `docs/GDCMAS-Walkthrough-Video-<role>.mp4` |
 
 Committed recordings: `-dentist.mp4` (includes the tap-to-chart interaction) and
-`-secretary.mp4` (front-desk workflow, read-only chart).
+`-secretary.mp4` (front-desk workflow, read-only chart). Both end on the public
+`/book` page, the one surface with no account at all.
 
 The video is Playwright's silent recording plus a caption overlay injected per
 step, so it needs no narration. Run it with `--verify` to assert every caption
@@ -208,10 +213,10 @@ only constructed when the flag is set.
 
 ## UI/UX walkthrough
 
-`docs/GDCMAS-UI-UX-Walkthrough.pdf` documents all 19 screens — one page per
+`docs/GDCMAS-UI-UX-Walkthrough.pdf` documents all 21 screens — one page per
 screen with a screenshot and notes on what the screen does, who uses it and why
-it is built the way it is. It was generated from preview mode, so every record
-in it is fabricated.
+it is built the way it is, including the public `/book` page. It was generated
+from preview mode, so every record in it is fabricated.
 
 To regenerate it after changing the interface, start `npm run dev` with preview
 mode enabled and run, in order:
@@ -263,6 +268,8 @@ It asserts, among other things:
 - a patient registered at one branch is visible to the other branch's secretary
   once they have an appointment there
 - cancelling an appointment frees the slot
+- a patient with a pending appointment at one branch cannot be booked at the
+  other branch until the first is settled
 - `promote_to_admin` is not callable by clients at all
 - deleting a patient with history is refused, not silently cascaded
 
@@ -282,6 +289,39 @@ bash scripts/pg-test.sh    # RLS + booking-constraint smoke test on throwaway Po
 
 The screenshot, audit, and PDF commands (`ui:shots`, `ui:audit`, `ui:pdf`) are
 documented under [UI/UX walkthrough](#uiux-walkthrough) above.
+
+## Public patient booking
+
+`/book` is the one unauthenticated surface. It is whitelisted in `proxy.ts` and
+talks **only** to three anon-callable `SECURITY DEFINER` functions in
+`schema.sql` — `public_branches()`, `public_branch_availability()` and
+`public_request_appointment()`. The `anon` role has no table grants, so the page
+can never read a patient row: it shows branch names and which slots are
+occupied, then submits name + birthdate + contact and receives only an
+accepted/refused verdict.
+
+A self-booking is inserted as status `requested` for the clinic to confirm. The
+database matches an existing record on name + birthdate, or creates one
+("open self-registration"); two matches are refused rather than guessed.
+
+### Cross-branch pending guard
+
+A patient may hold only one live appointment across the clinic at a time. The
+trigger `appointments_cross_branch_pending` (via
+`public.enforce_cross_branch_pending()`) rejects a new appointment when the same
+patient already has a `requested` / `scheduled` / `confirmed` appointment at a
+**different** branch, until that one is settled (`completed`, `cancelled`, or
+`no_show`). It is enforced in the database so the staff form and the public RPC
+are covered by the same rule; the staff action also pre-checks it to name the
+other branch in the message. `scripts/pg-test.sh` covers it.
+
+## Theme
+
+The palette is a set of CSS custom properties in `app/globals.css` (`:root`),
+exposed to Tailwind via `@theme inline`, so every component uses semantic tokens
+(`bg-brand`, `text-brand`, `ring-brand`). The brand is a gentle sage green
+(`--brand #4a7a5c`) chosen to keep body text and button labels at WCAG AA
+contrast on the near-white ground.
 
 ## Before going live
 
@@ -319,6 +359,9 @@ The following are deliberately unresolved and must not be treated as settled:
   perform or schedule backups. Supabase PITR and an export policy still need to
   be agreed.
 - **Retention and breach-notification policy** for patient records.
+- **Public booking abuse controls.** `/book` is unauthenticated: `public_request_appointment` needs rate limiting and bot protection (and probably a captcha) before it is exposed to the internet, or it can be used to spam `requested` rows and create patient records.
+- **Self-booking patient matching.** Matching on name + birthdate can attach a request to the wrong existing record; confirm with the clinic whether that is acceptable or a stronger identifier (patient_no, contact number, clinic-staff review) is required.
+- **Public availability disclosure.** `/book` publishes per-branch occupancy. Confirm the clinic is comfortable exposing how full each branch is, or restrict the page to authenticated staff only.
 - **Password rotation.** Staff accounts created from the Staff page are given an
   administrator-supplied password with no forced change.
 - **Philippine Data Privacy Act** obligations. Out of scope for this scaffold.

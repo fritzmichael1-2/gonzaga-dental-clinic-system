@@ -11,9 +11,10 @@ import sys
 from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from _common import BASE, REPO, SHOTS, launch  # noqa: E402
+from _common import BASE, REPO, SHOTS, clinic_today, launch  # noqa: E402
 
 OUT = SHOTS
+TODAY = clinic_today()
 PATIENT = "0001-0000-4000-8000-000000000001"
 PATIENT2 = "0005-0000-4000-8000-000000000005"
 
@@ -35,13 +36,15 @@ SHOTS = [
     ("14-staff", "/staff", (1440, 1000), "Staff accounts, roles, and home-branch assignment (admin only).", True),
     ("15-audit-log", "/audit-log", (1440, 1000), "Append-only audit log (admin only).", True),
     ("16-backups", "/backups", (1440, 1000), "Backup log and export action (admin only).", True),
+    ("17-book", f"/book?date={TODAY}", (1440, 1500), "Public booking page: branch, date, and which times are open. No account, no patient data.", True),
 ]
 
 # Mobile checks on the most-used screens.
 MOBILE = [
-    ("17-mobile-dashboard", "/dashboard", (390, 844), "Dashboard at phone width: sidebar collapses to a scrollable nav.", True),
-    ("18-mobile-patients", "/patients", (390, 844), "Patient directory at phone width.", True),
-    ("19-mobile-branches", "/branches", (390, 844), "Two-branch overview at phone width: the per-branch figures stack into one column.", True),
+    ("18-mobile-dashboard", "/dashboard", (390, 844), "Dashboard at phone width: sidebar collapses to a scrollable nav.", True),
+    ("19-mobile-patients", "/patients", (390, 844), "Patient directory at phone width.", True),
+    ("20-mobile-branches", "/branches", (390, 844), "Two-branch overview at phone width: the per-branch figures stack into one column.", True),
+    ("21-mobile-book", f"/book?date={TODAY}", (390, 844), "Public booking at phone width — the screen a patient actually books from.", True),
 ]
 
 
@@ -68,6 +71,10 @@ def shoot(page, slug, path, size, desc, full, problems):
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
+    # Renumbering a slug leaves the old file behind, and the deck/PDF would
+    # happily embed the stale image — clear the previous run first.
+    for old in OUT.glob("*.png"):
+        old.unlink()
     problems, results = [], []
     with sync_playwright() as p:
         b = launch(p)

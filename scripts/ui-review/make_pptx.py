@@ -23,7 +23,7 @@ from make_pdf import PAGES  # noqa: E402
 
 OUT = REPO / "docs" / "GDCMAS-Project-Walkthrough.pptx"
 
-TEAL = RGBColor(0x0F, 0x76, 0x6E)
+TEAL = RGBColor(0x4A, 0x7A, 0x5C)  # brand sage, from app/globals.css --brand
 INK = RGBColor(0x1C, 0x19, 0x17)
 MUTED = RGBColor(0x78, 0x71, 0x6C)
 PAPER = RGBColor(0xFA, 0xFA, 0xF9)
@@ -35,8 +35,8 @@ W, H = Inches(13.333), Inches(7.5)
 MARGIN = Inches(0.62)
 
 ADMIN_ONLY = {"14-staff", "15-audit-log", "16-backups"}
-DENTIST_ADMIN = {"03-branches", "19-mobile-branches"}
-PUBLIC = {"01-sign-in"}
+DENTIST_ADMIN = {"03-branches", "20-mobile-branches"}
+PUBLIC = {"01-sign-in", "17-book", "21-mobile-book"}
 
 
 def role_tag(slug: str) -> str:
@@ -237,7 +237,7 @@ def build():
     # 5. Staff UX change 2
     s = blank(prs)
     chrome(s, "The waiting room: one tap, not a dropdown", None, 5, total)
-    shot = SHOTS / "12-appointments.png"
+    shot = SHOTS / "13-appointments.png"
     if shot.exists():
         picture(s, shot, MARGIN, Inches(1.3), Inches(6.0), Inches(5.3))
     bullets(s, Inches(6.9), Inches(1.45), Inches(5.8), Inches(4.4), [
@@ -280,10 +280,10 @@ def build():
     s = blank(prs)
     chrome(s, "How it was verified", None, num, total)
     bullets(s, MARGIN, Inches(1.35), Inches(6.2), Inches(5), [
-        "Database smoke test against a throwaway PostgreSQL instance: 24 sections, including 7 attempts that must be denied by row-level security.",
+        "Database smoke test against a throwaway PostgreSQL instance: 26 sections, including 8 attempts that must be denied by row-level security.",
         "The schema is applied twice per run to prove it is idempotent, and the seed runs twice.",
         "TypeScript, ESLint and a production build with preview disabled, confirming every authenticated route stays dynamic.",
-        "19 screenshots captured at desktop and mobile, with console errors and page errors treated as failures.",
+        "21 screenshots captured at desktop and mobile, with console errors and page errors treated as failures.",
         "A layout audit at five viewport widths checks for horizontal overflow and undersized touch targets.",
     ], size=13.5)
     bullets(s, Inches(7.0), Inches(1.35), Inches(5.7), Inches(5), [
@@ -305,6 +305,8 @@ def build():
         "The procedure code list, and whether codes must map to a national fee schedule.",
         "Record retention periods, backup schedule, and who may hold each role — particularly whether a receptionist ever needs the dentist and admin views.",
         "Whether a patient may be registered at one branch and treated routinely at the other, which changes how appointments are booked.",
+        "Public booking: whether publishing per-branch availability is acceptable, and rate limiting or a captcha before the page faces the internet.",
+        "How a self-booked request should match an existing patient — name plus birthdate today — or whether a stronger identifier is required.",
     ], size=14)
 
     prs.save(OUT)

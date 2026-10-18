@@ -432,6 +432,40 @@ export function createPreviewClient() {
     from(table: string) {
       return new PreviewQuery(table);
     },
+    /**
+     * Minimal `rpc()` support for the public booking page's read-only calls.
+     * The booking write is rejected like every other preview write.
+     */
+    rpc(name: string, args?: Record<string, unknown>) {
+      if (name === "public_branches") {
+        const rows = (previewTables.branches ?? []).filter(
+          (b) => b.is_active !== false,
+        );
+        return Promise.resolve({
+          data: rows.map((b) => ({ id: b.id, name: b.name })),
+          error: null,
+        });
+      }
+      if (name === "public_branch_availability") {
+        return Promise.resolve({
+          data: previewAvailability(
+            String(args?.p_branch ?? ""),
+            String(args?.p_date ?? ""),
+          ),
+          error: null,
+        });
+      }
+      if (name === "public_request_appointment") {
+        return Promise.resolve({
+          data: { ok: false, message: PREVIEW_ERROR },
+          error: null,
+        });
+      }
+      return Promise.resolve({
+        data: null,
+        error: { message: `Unknown preview rpc: ${name}` },
+      });
+    },
     auth: {
       async getUser() {
         return { data: { user: null }, error: null };
@@ -440,5 +474,60 @@ export function createPreviewClient() {
         return { data: {}, error: { message: PREVIEW_ERROR } };
       },
     },
+  };
+}
+
+/** Clinic wall-clock helpers (Asia/Manila is a fixed UTC+8). */
+function clinicMinutesAndDay(iso: string): { hhmm: string; day: string } {
+  const shifted = new Date(new Date(iso).getTime() + 8 * 60 * 60_000);
+  const hh = String(shifted.getUTCHours()).padStart(2, "0");
+  const mm = String(shifted.getUTCMinutes()).padStart(2, "0");
+  const day = `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}-${String(shifted.getUTCDate()).padStart(2, "0")}`;
+  return { hhmm: `${hh}:${mm}`, day };
+}
+
+/** Mirror of public.public_branch_availability() over the fixtures. */
+function previewAvailability(branchId: string, date: string) {
+  const branch = (previewTables.branches ?? []).find((b) => b.id === branchId);
+  if (!branch || branch.is_active === false) {
+    return { ok: false, message: "Unknown branch." };
+  }
+
+  const settings = (previewTables.clinic_settings ?? [])[0] as
+    | Record<string, unknown>
+    | undefined;
+  const openingHours = settings?.opening_hours as
+    | Record<string, [string, string] | null>
+    | undefined;
+  const slotMin = (settings?.slot_minutes as number) ?? 30;
+
+  const [y, m, d] = date.split("-").map(Number);
+  if (!y || !m || !d) return { ok: false, message: "Choose a date." };
+  const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const window = openingHours?.[String(weekday)];
+  const open = Array.isArray(window) && window.length === 2;
+
+  const busy = (previewTables.appointments ?? [])
+    .filter((a) => a.branch_id === branchId)
+    .filter((a) =>
+      ["requested", "scheduled", "confirmed"].includes(String(a.status)),
+    )
+    .map((a) => ({
+      start: clinicMinutesAndDay(String(a.starts_at)).hhmm,
+      day: clinicMinutesAndDay(String(a.starts_at)).day,
+      end: clinicMinutesAndDay(String(a.ends_at)).hhmm,
+    }))
+    .filter((a) => a.day === date)
+    .map((a) => ({ start: a.start, end: a.end }));
+
+  return {
+    ok: true,
+    branch: { id: branch.id, name: branch.name },
+    date,
+    open,
+    opensAt: open ? (window as [string, string])[0] : null,
+    closesAt: open ? (window as [string, string])[1] : null,
+    slotMin,
+    busy,
   };
 }

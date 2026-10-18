@@ -1,6 +1,6 @@
 import { Suspense } from "react";
+import Image from "next/image";
 import { redirect } from "next/navigation";
-import { Stethoscope } from "lucide-react";
 import { getSession } from "@/lib/security/session";
 import { isPreviewMode } from "@/lib/preview";
 import LoginForm from "./login-form";
@@ -21,8 +21,8 @@ export default async function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
       <div className="flex w-full flex-col items-center gap-6">
-        <div className="flex items-center gap-2 text-brand">
-          <Stethoscope size={22} aria-hidden />
+        <div className="flex items-center gap-2.5 text-brand">
+          <Image src="/clinic-logo.png" alt="" width={30} height={30} priority />
           <span className="text-sm font-semibold tracking-wide uppercase">
             Gonzaga Dental Clinic
           </span>

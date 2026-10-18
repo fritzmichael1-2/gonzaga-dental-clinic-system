@@ -64,6 +64,19 @@ export function clinicNow(): Date {
   return new Date(base + CLINIC_UTC_OFFSET_MINUTES * 60_000);
 }
 
+/**
+ * The true UTC instant of "now", as opposed to the wall-clock-shifted view.
+ *
+ * `clinicNow()` adds the clinic offset so its UTC getters read as clinic wall
+ * time; feeding its `toISOString()` into a comparison against real instants
+ * (slot `startIso` values, which are unshifted) silently moves "now" eight
+ * hours into the future — every slot in the day then reads as past. Anything
+ * comparing against an absolute timestamp needs this one instead.
+ */
+export function clinicInstantNow(): Date {
+  return isPreviewClockPinned() ? new Date(PREVIEW_ANCHOR_ISO) : new Date();
+}
+
 /** Today as a clinic-local YYYY-MM-DD key. */
 export function clinicTodayKey(): string {
   const shifted = clinicNow();
@@ -225,8 +238,58 @@ export function buildDaySlots(opts: {
 }
 
 /** True when the slot's start is already in the past. */
-export function isPast(slot: Slot, now: Date = new Date()): boolean {
+export function isPast(
+  slot: { startIso: string },
+  now: Date = new Date()
+): boolean {
   return new Date(slot.startIso).getTime() <= now.getTime();
+}
+
+/**
+ * Build a slot grid from an explicit opening window and a list of busy
+ * intervals, for the public booking page.
+ *
+ * `buildDaySlots` is tied to staff-shaped `Appointment` rows and the weekly
+ * opening-hours map; the public page only receives the day's open/close times
+ * and anonymous busy intervals from `public_branch_availability`, so it needs
+ * this lighter counterpart. Same half-open [start, end) rule, so a slot that
+ * abuts a booking is still offered.
+ */
+export type PublicSlot = {
+  start: string;
+  end: string;
+  startIso: string;
+  available: boolean;
+};
+
+export function buildSlotsFromWindow(opts: {
+  date: string;
+  opensAt: string;
+  closesAt: string;
+  slotMin: number;
+  busy: { start: string; end: string }[];
+}): PublicSlot[] {
+  const step = opts.slotMin > 0 ? opts.slotMin : 30;
+  const open = minutesOf(opts.opensAt);
+  const close = minutesOf(opts.closesAt);
+  const busy = opts.busy.map((b) => ({
+    s: minutesOf(b.start),
+    e: minutesOf(b.end),
+  }));
+
+  const slots: PublicSlot[] = [];
+  for (let m = open; m + step <= close; m += step) {
+    const start = hhmmOf(m);
+    const end = hhmmOf(m + step);
+    const available = !busy.some((b) => b.s < m + step && b.e > m);
+    slots.push({
+      start,
+      end,
+      startIso: localIso(opts.date, start),
+      available,
+    });
+  }
+  return slots;
 }
 
 /**

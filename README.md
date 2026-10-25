@@ -35,6 +35,10 @@ no session, and no read access to any patient record.
 - Supabase (Postgres, GoTrue auth, RLS)
 - Zod for server-action validation
 
+## Deployment
+
+For detailed setup and deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md). The guide covers prerequisites, environment configuration, Supabase database setup, authentication, building, and deployment to platforms like Vercel.
+
 ## Roles and permissions
 
 Authorization is enforced in three independent layers, so a mistake in one does

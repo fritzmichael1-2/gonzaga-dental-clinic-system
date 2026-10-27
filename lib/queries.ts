@@ -1,6 +1,6 @@
 import "server-only";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { Appointment, TreatmentRecord } from "@/lib/types";
+import type { Appointment, PatientIntake, TreatmentRecord } from "@/lib/types";
 
 /**
  * Typed data-access layer.
@@ -217,6 +217,25 @@ export async function getPatient(id: string): Promise<PatientWithBranch | null> 
 
   if (error) throw new Error(`patient query failed: ${error.message}`);
   return (data ?? null) as PatientWithBranch | null;
+}
+
+/**
+ * The digitised paper intake form for one patient. Returns null for records
+ * created before the form existed, which the record page renders as an
+ * explicit "not captured yet" state rather than an empty table.
+ */
+export async function getPatientIntake(
+  patientId: string
+): Promise<PatientIntake | null> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("patient_intake")
+    .select("*")
+    .eq("patient_id", patientId)
+    .maybeSingle();
+
+  if (error) throw new Error(`intake query failed: ${error.message}`);
+  return (data ?? null) as PatientIntake | null;
 }
 
 export async function listBranches() {

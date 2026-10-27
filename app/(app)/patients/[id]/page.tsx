@@ -5,6 +5,7 @@ import { requireStaff } from "@/lib/security/session";
 import {
   getClinicSettings,
   getPatient,
+  getPatientIntake,
   listAppointments,
   listBranches,
   listTreatmentsForPatient,
@@ -26,6 +27,7 @@ import ToothChart from "@/components/tooth-chart";
 import Odontogram from "@/components/odontogram";
 import TreatmentForm from "@/components/treatment-form";
 import ConsentForm from "@/components/consent-form";
+import IntakeSummary from "@/components/intake-summary";
 import PatientForm from "@/components/patient-form";
 import PrintButton from "@/components/print-button";
 import { recordConsent, recordTreatment, updatePatient } from "../actions";
@@ -60,13 +62,14 @@ export default async function PatientRecordPage({
   const patient = await getPatient(id);
   if (!patient) notFound();
 
-  const [treatments, appointments, branches, settings, consents] =
+  const [treatments, appointments, branches, settings, consents, intake] =
     await Promise.all([
       listTreatmentsForPatient(id),
       listAppointments({ patientId: id, limit: 50 }),
       listBranches(),
       getClinicSettings(),
       fetchConsents(id),
+      getPatientIntake(id),
     ]);
 
   // Opening a record is itself an access event (Scope 7: audit logging).
@@ -261,16 +264,18 @@ export default async function PatientRecordPage({
       {activeTab === "chart" && <Odontogram />}
 
       {activeTab === "intake" && (
-        <section className="panel">
-          <div className="panel-header">
-            <h2 className="panel-title">Intake & Medical History</h2>
-          </div>
-          <div className="panel-body">
-            <p className="text-sm text-muted">
-              Patient intake form will be available here. Secretary can fill this out with the patient&apos;s information and medical history.
+        <>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="hint">
+              The paper intake form, digitised. Encoded by the front desk and
+              signed by the patient.
             </p>
+            <div className="no-print">
+              <PrintButton />
+            </div>
           </div>
-        </section>
+          <IntakeSummary intake={intake} patientName={fullName(patient)} />
+        </>
       )}
 
       {activeTab === "treatments" && (

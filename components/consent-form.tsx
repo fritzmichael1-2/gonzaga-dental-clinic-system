@@ -256,7 +256,7 @@ export default function ConsentForm({
               Confirm & accept
             </button>
           </div>
-          {state.message && (
+          {state?.message && (
             <p className={`text-sm ${state.ok ? "text-emerald-700" : "text-danger"}`}>
               {state.message}
             </p>

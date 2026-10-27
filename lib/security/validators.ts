@@ -80,6 +80,124 @@ export const patientSchema = z.object({
 export type PatientInput = z.infer<typeof patientSchema>;
 
 // ---------------------------------------------------------------------
+// Patient intake (Scope 1) — the paper intake form, digitised.
+//
+// The block answers (screening, allergies, conditions, women-only, physician)
+// arrive as JSON strings in hidden inputs because they are built client-side
+// by the yes/no toggles and the checkbox grids. Each one is re-validated here
+// so a tampered payload degrades to the empty default instead of failing the
+// whole registration — losing the free-text fields would be worse than losing
+// one checkbox.
+// ---------------------------------------------------------------------
+const optionalDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+  .optional()
+  .or(z.literal(""));
+
+const intakeAnswerSchema = z.object({
+  answer: z.enum(["yes", "no"]).nullable().default(null),
+  detail: trimmed(300).nullable().default(null),
+});
+
+const physicianSchema = z.object({
+  name: trimmed(80).nullable().default(null),
+  specialty: trimmed(80).nullable().default(null),
+  office: trimmed(160).nullable().default(null),
+  phone: trimmed(20).nullable().default(null),
+});
+
+const womenOnlySchema = z.object({
+  pregnant: z.enum(["yes", "no"]).nullable().default(null),
+  nursing: z.enum(["yes", "no"]).nullable().default(null),
+  pills: z.enum(["yes", "no"]).nullable().default(null),
+});
+
+export const EMPTY_PHYSICIAN: z.infer<typeof physicianSchema> = {
+  name: null,
+  specialty: null,
+  office: null,
+  phone: null,
+};
+
+export const EMPTY_WOMEN_ONLY: z.infer<typeof womenOnlySchema> = {
+  pregnant: null,
+  nursing: null,
+  pills: null,
+};
+
+/** Parse a JSON-encoded hidden input, falling back to `fallback` if unusable. */
+function jsonField<T>(schema: z.ZodType<T>, fallback: T) {
+  return z
+    .string()
+    .optional()
+    .transform((raw): T => {
+      if (!raw) return fallback;
+      try {
+        const out = schema.safeParse(JSON.parse(raw));
+        return out.success ? out.data : fallback;
+      } catch {
+        return fallback;
+      }
+    });
+}
+
+const yesNo = z.enum(["yes", "no"]).optional().nullable().or(z.literal(""));
+
+export const intakeSchema = z.object({
+  // 1. Patient information record
+  religion: trimmed(60).optional().nullable(),
+  nationality: trimmed(60).optional().nullable(),
+  birthplace: trimmed(120).optional().nullable(),
+  occupation: trimmed(80).optional().nullable(),
+  home_no: phoneSchema,
+  office_no: phoneSchema,
+  fax_no: phoneSchema,
+  dental_insurance: trimmed(120).optional().nullable(),
+  insurance_effective: optionalDate,
+  guardian_name: trimmed(80).optional().nullable(),
+  guardian_occupation: trimmed(80).optional().nullable(),
+  guardian_email: z.union([emailSchema, z.literal("")]).optional().nullable(),
+  referred_by: trimmed(120).optional().nullable(),
+  consultation_reason: trimmed(200).optional().nullable(),
+
+  // 2. Dental history
+  previous_dentist: trimmed(80).optional().nullable(),
+  previous_dentist_office: trimmed(160).optional().nullable(),
+  last_dental_visit: optionalDate,
+
+  // 3. Medical history
+  physician: jsonField(physicianSchema, EMPTY_PHYSICIAN),
+  screening: jsonField(
+    z.record(z.string(), intakeAnswerSchema),
+    {} as Record<string, z.infer<typeof intakeAnswerSchema>>
+  ),
+  allergies: jsonField(z.array(trimmed(60)).max(20), [] as string[]),
+  allergy_other: trimmed(120).optional().nullable(),
+  bleeding_problems: yesNo,
+  bleeding_time: trimmed(120).optional().nullable(),
+  women_only: jsonField(womenOnlySchema, EMPTY_WOMEN_ONLY),
+  blood_type: trimmed(10).optional().nullable(),
+  blood_pressure: trimmed(20).optional().nullable(),
+  conditions: jsonField(z.array(trimmed(80)).max(50), [] as string[]),
+  condition_other: trimmed(120).optional().nullable(),
+  notes: trimmed(1000).optional().nullable(),
+
+  // Signature — a PNG data URL drawn on the tablet at the front desk.
+  signature_png: z
+    .string()
+    .max(1_000_000, "Signature image is too large")
+    .refine(
+      (v) => v === "" || v.startsWith("data:image/png;base64,"),
+      "Signature must be a PNG image"
+    )
+    .optional(),
+});
+
+export type IntakeInput = z.infer<typeof intakeSchema>;
+
+
+// ---------------------------------------------------------------------
 // Consent (Scope 3)
 // ---------------------------------------------------------------------
 export const consentSchema = z.object({

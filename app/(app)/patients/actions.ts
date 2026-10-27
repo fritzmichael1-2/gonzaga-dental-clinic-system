@@ -7,6 +7,7 @@ import { requireStaff } from "@/lib/security/session";
 import {
   appointmentSchema,
   consentSchema,
+  intakeSchema,
   patientSchema,
   treatmentSchema,
 } from "@/lib/security/validators";
@@ -74,15 +75,56 @@ export async function createPatient(
     branch_id: String(formData.get("branch_id") ?? ""),
   };
 
+  // The rest of the paper intake form. Kept separate from `raw` because it is
+  // validated by its own schema and stored in `patient_intake`, not `patients`.
+  const rawIntake = {
+    religion: String(formData.get("religion") ?? ""),
+    nationality: String(formData.get("nationality") ?? ""),
+    birthplace: String(formData.get("birthplace") ?? ""),
+    occupation: String(formData.get("occupation") ?? ""),
+    home_no: String(formData.get("home_no") ?? ""),
+    office_no: String(formData.get("office_no") ?? ""),
+    fax_no: String(formData.get("fax_no") ?? ""),
+    dental_insurance: String(formData.get("dental_insurance") ?? ""),
+    insurance_effective: String(formData.get("insurance_effective") ?? ""),
+    guardian_name: String(formData.get("guardian_name") ?? ""),
+    guardian_occupation: String(formData.get("guardian_occupation") ?? ""),
+    guardian_email: String(formData.get("guardian_email") ?? ""),
+    referred_by: String(formData.get("referred_by") ?? ""),
+    consultation_reason: String(formData.get("consultation_reason") ?? ""),
+    previous_dentist: String(formData.get("previous_dentist") ?? ""),
+    previous_dentist_office: String(formData.get("previous_dentist_office") ?? ""),
+    last_dental_visit: String(formData.get("last_dental_visit") ?? ""),
+    physician: String(formData.get("physician") ?? ""),
+    screening: String(formData.get("screening") ?? ""),
+    allergies: String(formData.get("allergies_json") ?? ""),
+    allergy_other: String(formData.get("allergy_other") ?? ""),
+    bleeding_problems: String(formData.get("bleeding_problems") ?? ""),
+    bleeding_time: String(formData.get("bleeding_time") ?? ""),
+    women_only: String(formData.get("women_only") ?? ""),
+    blood_type: String(formData.get("blood_type") ?? ""),
+    blood_pressure: String(formData.get("blood_pressure") ?? ""),
+    conditions: String(formData.get("conditions") ?? ""),
+    condition_other: String(formData.get("condition_other") ?? ""),
+    notes: String(formData.get("notes") ?? ""),
+    signature_png: String(formData.get("signature_png") ?? ""),
+  };
+
   const parsed = patientSchema.safeParse(raw);
-  if (!parsed.success) {
+  const parsedIntake = intakeSchema.safeParse(rawIntake);
+  if (!parsed.success || !parsedIntake.success) {
+    const fieldErrors = {
+      ...(parsed.success ? {} : firstErrors(parsed.error)),
+      ...(parsedIntake.success ? {} : firstErrors(parsedIntake.error)),
+    };
     return {
       ok: false,
       message: "Check the highlighted fields.",
-      fieldErrors: firstErrors(parsed.error),
+      fieldErrors,
     };
   }
   const p = parsed.data;
+  const i = parsedIntake.data;
 
   // The duplicate guard: the plan lists duplicate records as a real risk, so
   // a staff member explicitly confirms instead of silently creating a second
@@ -113,6 +155,18 @@ export async function createPatient(
     }
   }
 
+  const branchId = nullable(p.branch_id) ?? session.branchId;
+
+  // The patient list shows an allergies alert and a one-line history read from
+  // the `patients` row, so those two columns are a *summary* derived from the
+  // structured answers — not a second source of truth. The full form lives in
+  // `patient_intake`.
+  const allergySummary =
+    [...i.allergies, i.allergy_other].filter(Boolean).join(", ") ||
+    nullable(p.allergies);
+  const conditionSummary =
+    [...i.conditions, i.condition_other].filter(Boolean).join(", ") || null;
+
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("patients")
@@ -130,10 +184,10 @@ export async function createPatient(
       address: nullable(p.address),
       emergency_contact_name: nullable(p.emergency_contact_name),
       emergency_contact_no: nullable(p.emergency_contact_no),
-      allergies: nullable(p.allergies),
-      medical_history: nullable(p.medical_history),
+      allergies: allergySummary,
+      medical_history: nullable(p.medical_history) ?? conditionSummary,
       medications: nullable(p.medications),
-      branch_id: nullable(p.branch_id) ?? session.branchId,
+      branch_id: branchId,
       created_by: session.userId,
     })
     .select("id, patient_no")
@@ -141,6 +195,65 @@ export async function createPatient(
 
   if (error) {
     return { ok: false, message: `Could not save: ${error.message}` };
+  }
+
+  const { error: intakeError } = await supabase.from("patient_intake").insert({
+    patient_id: data.id,
+    branch_id: branchId,
+    religion: nullable(i.religion),
+    nationality: nullable(i.nationality),
+    birthplace: nullable(i.birthplace),
+    occupation: nullable(i.occupation),
+    home_no: nullable(i.home_no),
+    office_no: nullable(i.office_no),
+    fax_no: nullable(i.fax_no),
+    dental_insurance: nullable(i.dental_insurance),
+    insurance_effective: i.insurance_effective || null,
+    guardian_name: nullable(i.guardian_name),
+    guardian_occupation: nullable(i.guardian_occupation),
+    guardian_email: nullable(i.guardian_email),
+    referred_by: nullable(i.referred_by),
+    consultation_reason: nullable(i.consultation_reason),
+    previous_dentist: nullable(i.previous_dentist),
+    previous_dentist_office: nullable(i.previous_dentist_office),
+    last_dental_visit: i.last_dental_visit || null,
+    physician: i.physician,
+    screening: i.screening,
+    allergies: i.allergies,
+    allergy_other: nullable(i.allergy_other),
+    bleeding_problems: i.bleeding_problems || null,
+    bleeding_time: nullable(i.bleeding_time),
+    women_only: i.women_only,
+    blood_type: nullable(i.blood_type),
+    blood_pressure: nullable(i.blood_pressure),
+    conditions: i.conditions,
+    condition_other: nullable(i.condition_other),
+    notes: nullable(i.notes),
+    signature_png: i.signature_png || null,
+    // The pair is constrained together in the schema: either both are set or
+    // neither is.
+    signed_at: i.signature_png ? new Date().toISOString() : null,
+    // Who encoded the form. The signature above is the patient's.
+    filled_by: session.userId,
+  });
+
+  if (intakeError) {
+    // A patient row with no medical history is worse than no row at all —
+    // staff would read a blank allergy list as "no allergies". Drop the
+    // half-made record so the registration can be retried cleanly.
+    await supabase.from("patients").delete().eq("id", data.id);
+    await auditLog({
+      action: AUDIT.patientRegistered,
+      userId: session.userId,
+      email: session.email,
+      entityType: "patient",
+      entityId: data.id,
+      details: { intake_failed: intakeError.message },
+    });
+    return {
+      ok: false,
+      message: `Could not save the intake answers: ${intakeError.message}`,
+    };
   }
 
   // patient_no is not PHI; the id lets staff jump straight to the new record.

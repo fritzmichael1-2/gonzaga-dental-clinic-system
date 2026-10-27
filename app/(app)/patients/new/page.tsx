@@ -1,7 +1,7 @@
 import { requireStaff } from "@/lib/security/session";
 import { listBranches } from "@/lib/queries";
 import { PageHeader } from "@/components/ui";
-import PatientForm from "@/components/patient-form";
+import PatientIntakeForm from "@/components/patient-intake-form";
 import { createPatient } from "../actions";
 
 export const metadata = { title: "Register patient" };
@@ -14,18 +14,18 @@ export default async function NewPatientPage() {
     <>
       <PageHeader
         title="Register patient"
-        description="Completes the intake step: details, medical history, and consent are stored against one record."
+        description="The paper intake form, digitised: details, dental and medical history, and the patient's signature on one record."
       />
 
       <div className="mb-5">
-        <PatientForm
+        <PatientIntakeForm
           action={createPatient}
           branches={branches}
           defaultBranchId={session.branchId}
         />
       </div>
 
-<p className="hint">
+      <p className="hint">
         TODO(CLINIC): required fields, consent wording, and retention practices
         are still to be confirmed with the clinic.
       </p>

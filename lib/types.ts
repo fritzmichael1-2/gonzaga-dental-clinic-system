@@ -60,6 +60,75 @@ export type Patient = {
   updated_at: string;
 };
 
+/** One of the 7 "yes/no" screening questions on the paper intake form. */
+export type IntakeAnswer = { answer: "yes" | "no" | null; detail: string | null };
+
+export type IntakeScreening = Record<string, IntakeAnswer>;
+
+export type IntakePhysician = {
+  name: string | null;
+  specialty: string | null;
+  office: string | null;
+  phone: string | null;
+};
+
+export type IntakeWomenOnly = {
+  pregnant: "yes" | "no" | null;
+  nursing: "yes" | "no" | null;
+  pills: "yes" | "no" | null;
+};
+
+/**
+ * The paper intake form, digitised. One row per patient, created with the
+ * record. Mirrors `public.patient_intake` in supabase/schema.sql.
+ */
+export type PatientIntake = {
+  id: string;
+  patient_id: string;
+  branch_id: string | null;
+
+  religion: string | null;
+  nationality: string | null;
+  birthplace: string | null;
+  occupation: string | null;
+  home_no: string | null;
+  office_no: string | null;
+  fax_no: string | null;
+  dental_insurance: string | null;
+  insurance_effective: string | null;
+
+  guardian_name: string | null;
+  guardian_occupation: string | null;
+  guardian_email: string | null;
+
+  referred_by: string | null;
+  consultation_reason: string | null;
+
+  previous_dentist: string | null;
+  previous_dentist_office: string | null;
+  last_dental_visit: string | null;
+
+  physician: IntakePhysician;
+  screening: IntakeScreening;
+  allergies: string[];
+  allergy_other: string | null;
+  bleeding_problems: "yes" | "no" | null;
+  bleeding_time: string | null;
+  women_only: IntakeWomenOnly;
+  blood_type: string | null;
+  blood_pressure: string | null;
+  conditions: string[];
+  condition_other: string | null;
+  notes: string | null;
+
+  signature_png: string | null;
+  signed_at: string | null;
+  filled_by: string | null;
+
+  created_at: string;
+  updated_at: string;
+};
+
 export type ConsentType =
   | "treatment"
   | "privacy"
@@ -93,6 +162,8 @@ export type TreatmentRecord = {
   notes: string | null;
   performed_by: string | null;
   performed_at: string;
+  amount_charged: number;
+  amount_paid: number;
   created_by: string | null;
   created_at: string;
   updated_at: string;

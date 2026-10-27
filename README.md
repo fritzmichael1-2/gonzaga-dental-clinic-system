@@ -15,7 +15,7 @@ marked `TODO(CLINIC)` and must be confirmed by the clinic itself.
 
 | Area | Capability |
 | --- | --- |
-| Patients | Registration/intake, duplicate detection before save, editable demographics, allergies alert |
+| Patients | Digital intake form (the clinic's paper form, including medical screening and a drawn signature), duplicate detection before save, editable demographics, allergies alert |
 | Consent | Versioned consent text captured per patient, with who recorded it |
 | Treatment | FDI tooth chart, procedure codes, surfaces, who performed it and when |
 | Appointments | Per-branch day view, slot generation from branch hours, live status changes, cross-branch pending guard |
@@ -28,6 +28,30 @@ Patients are **records, not logins.** Only clinic staff get accounts. A patient
 can *request* an appointment from the public `/book` page (see
 [Public patient booking](#public-patient-booking)), but that page has no account,
 no session, and no read access to any patient record.
+
+### The intake form
+
+Registration is the clinic's paper intake form, digitised — the same sections in
+the same order, including the seven medical-screening questions, the allergy
+list, the 36-item condition checklist, the women-only block, and the signature
+the patient draws on the tablet at the front desk.
+
+The answers are stored in two places on purpose:
+
+| Table | Holds | Why |
+| --- | --- | --- |
+| `patients` | Identity: name, birthdate, contact number, branch, plus an allergy / condition **summary** | Every list, search and duplicate check reads this row, so it stays small |
+| `patient_intake` | The full form: religion, birthplace, insurance, guardian, physician, screening answers, checklist, signature | Read as a whole block when a clinician opens the record, never filtered on |
+
+`patient_intake.filled_by` and `patient_intake.signed_at` are separate columns
+because they are two different people: the secretary encodes the form, the
+patient (or guardian) signs it. A row is constrained so a signature is either
+complete — image and timestamp — or absent, never half of one.
+
+The structured blocks are `jsonb`. They mirror the printed form exactly and are
+read as a block, so a column per checkbox would only add migration work;
+`TODO(CLINIC)` covers promoting one to its own column if the clinic ever reports
+on it.
 
 ## Stack
 

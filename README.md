@@ -241,6 +241,22 @@ inline text links are reported as advisories rather than failures). It needs
 Both scripts accept overrides via `GDCMAS_BASE_URL`, `GDCMAS_SHOTS_DIR` and
 `GDCMAS_CHROME`.
 
+## Form mockups
+
+Four standalone HTML mockups of the clinic's paper forms, served from
+`public/mockups/`. They are static files — no build step, no database
+connection, placeholder data only — and every page is labelled `(DEMO)`.
+
+| Mockup | URL | Who fills it |
+| --- | --- | --- |
+| Patient intake & medical history | `/mockups/intake-form.html` | Secretary encodes at the desk; patient or guardian signs |
+| Informed consent | `/mockups/informed-consent.html` | Patient signs, secretary assists, dentist countersigns |
+| Intraoral tooth chart (FDI) | `/mockups/index.html` | Dentist (a secretary may transcribe at dictation) |
+| Treatment record | `/mockups/treatment-record.html` | Secretary and dentist both update; admin restores archived entries |
+
+`/mockups` is listed in `PUBLIC_PATHS` in `proxy.ts`, so the pages open without
+a staff session. See `docs/mockups/README.md` for the editing workflow.
+
 ## Verifying the security guarantees
 
 ```bash

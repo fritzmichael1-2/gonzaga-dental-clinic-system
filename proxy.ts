@@ -11,13 +11,18 @@ import { isPreviewMode } from "@/lib/preview";
  * anon-callable public_* RPCs — so the rest of the tree is protected rather
  * than a list of prefixes.
  *
+ * `/mockups` is also public on purpose: it is a folder of static HTML form
+ * mockups (intake, consent, tooth chart, treatment ledger) used in the
+ * project defense. It contains placeholder data only, never a patient
+ * record, and it is served from `public/` so it is not part of the app.
+ *
  * NOTE: this is a fast-path redirect only, not the security boundary. Role and
  * `is_active` checks happen in lib/security/session.ts against the `staff`
  * table, and row-level rules are enforced in Postgres. Proxy never trusts
  * client-supplied role data.
  */
 
-const PUBLIC_PATHS = ["/login", "/book"];
+const PUBLIC_PATHS = ["/login", "/book", "/mockups"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GDCMAS — Treatment Record (DEMO)</title>
+<style>
+  :root{
+    --bg:#f5f7fa; --panel:#fff; --line:#d8dee9; --ink:#1a2230; --soft:#5d6b80;
+    --brand:#0f766e; --brand-soft:#e6f4f2;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  .demo-bar{
+    background:#fef3c7; border-bottom:1px solid #fcd34d; color:#78350f;
+    padding:8px 18px; font-size:12px; font-weight:600; letter-spacing:.02em;
+    display:flex; flex-wrap:wrap; gap:6px 16px; align-items:center; justify-content:space-between;
+  }
+  .demo-bar a{color:#78350f;font-weight:800}
+  .demo-bar .v{font-weight:600;opacity:.9}
+  header.head{
+    background:var(--panel); border-bottom:1px solid var(--line);
+    padding:16px max(18px,calc((100% - 1464px)/2));
+    display:flex; flex-wrap:wrap; align-items:center; gap:16px;
+  }
+  .logo{width:44px;height:44px;border-radius:50%;background:var(--brand);color:#fff;
+    display:grid;place-items:center;font-weight:700;font-size:15px;flex:0 0 auto}
+  .clinic{font-size:15px;font-weight:700;letter-spacing:.02em}
+  .subtitle{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--soft)}
+  .doc-badge{
+    font-size:10px;font-weight:800;letter-spacing:.14em;padding:5px 9px;
+    border:1.5px solid var(--brand);color:var(--brand);border-radius:4px;
+  }
+  .demo-patient{margin-left:auto;display:flex;gap:22px;flex-wrap:wrap;font-size:12px}
+  .demo-patient b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--soft);font-weight:600}
+
+  main{padding:18px; display:grid; gap:18px; max-width:1500px; margin-inline:auto}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .panel-head{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;
+    align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+  .panel-title{margin:0;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--soft)}
+  .panel-body{padding:16px}
+
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:#f8fafc}
+  .seg button{
+    border:0;background:transparent;padding:7px 12px;font:inherit;font-size:12px;font-weight:600;
+    color:var(--soft);cursor:pointer;border-right:1px solid var(--line);
+  }
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:var(--brand);color:#fff}
+  .search{
+    padding:7px 10px;border:1px solid var(--line);border-radius:7px;font:inherit;font-size:12.5px;
+    min-width:230px;background:#fff;
+  }
+  .btn{
+    display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:7px;
+    border:1px solid var(--line);background:#fff;cursor:pointer;font:inherit;font-size:12px;
+    font-weight:600;color:var(--ink);min-height:34px;
+  }
+  .btn:hover{background:#f1f5f9}
+  .btn-primary{background:var(--brand);border-color:var(--brand);color:#fff}
+  .btn-primary:hover{background:#0b5f59}
+  .btn-danger{color:#b91c1c;border-color:#fecaca}
+  .btn-danger:hover{background:#fef2f2}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .count{
+    font-size:10.5px;font-weight:800;background:#e2e8f0;color:#334155;
+    border-radius:20px;padding:1px 7px;min-width:20px;text-align:center;
+  }
+
+  /* ---------- balance bar (bottom of the ledger) ---------- */
+  .balance-bar{
+    display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:baseline;gap:26px;
+    padding:12px 18px;border-top:2px solid var(--brand);background:#f8fafc;
+  }
+  .balance-bar .b{display:flex;flex-direction:column;align-items:flex-end}
+  .balance-bar .b small{font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;
+    color:var(--soft);font-weight:700;margin-bottom:1px}
+  .balance-bar .b b{font-size:15px;font-variant-numeric:tabular-nums}
+  .balance-bar .b.owed{padding-left:26px;border-left:1px solid var(--line)}
+  .balance-bar .b.owed b{font-size:22px;color:#0b4f4a;letter-spacing:-.01em}
+
+  /* ---------- table ---------- */
+  .table-wrap{overflow:auto;max-height:66vh}
+  table{width:100%;border-collapse:separate;border-spacing:0;min-width:900px;font-size:12.5px}
+  thead th{
+    position:sticky;top:0;z-index:2;background:#f8fafc;text-align:left;
+    font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--soft);
+    font-weight:700;padding:9px 9px;border-bottom:1px solid var(--line);white-space:nowrap;
+  }
+  tbody td{padding:0 9px;border-bottom:1px solid #edf1f6;height:42px;vertical-align:middle}
+  .r{text-align:right}
+  .nowrap{white-space:nowrap}
+  td.num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+  td.strong{font-weight:700}
+
+  tbody tr:hover td{background:#fbfdff}
+  tbody tr.is-draft td:first-child{box-shadow:inset 3px 0 0 #f59e0b}
+  td.editable{cursor:text}
+  td.editable:hover{background:#f1f5f9}
+  .muted{color:var(--soft)}
+  .hint{font-size:11px;color:var(--soft);margin:0}
+
+  /* entry row */
+  tr.entry td{background:#f0fdfa;border-bottom:2px solid #99d5cd;padding:6px 8px}
+  tr.entry:hover td{background:#f0fdfa}
+  .field{
+    width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:6px;
+    font:inherit;font-size:12.5px;background:#fff;min-height:36px;
+  }
+  .field:focus{outline:2px solid #99d5cd;outline-offset:0;border-color:var(--brand)}
+  .field.invalid{border-color:#dc2626;background:#fef2f2}
+  .cell-input{
+    width:100%;padding:5px 7px;border:1px solid var(--brand);border-radius:5px;
+    font:inherit;font-size:12px;background:#fff;
+  }
+  .cell-input:focus{outline:2px solid #99d5cd;outline-offset:0}
+
+  /* status chips */
+  .chip{
+    display:inline-block;font-size:9.5px;font-weight:800;text-transform:uppercase;
+    letter-spacing:.07em;padding:3px 6px;border-radius:4px;white-space:nowrap;
+  }
+  .chip.draft{background:#fef3c7;color:#78350f}
+  .chip.verified{background:#dcfce7;color:#166534}
+  .chip.gone{background:#e2e8f0;color:#475569}
+  .stamp{font-size:9.5px;color:var(--soft);margin-top:2px;line-height:1.25}
+  .link{
+    border:0;background:none;padding:0;margin-top:2px;display:block;
+    font:inherit;font-size:10.5px;font-weight:700;color:var(--brand);
+    cursor:pointer;text-decoration:underline;
+  }
+  .link:hover{color:#0b5f59}
+  .act{
+    border:1px solid var(--line);background:#fff;border-radius:5px;cursor:pointer;
+    font:inherit;font-size:10.5px;font-weight:600;color:#64748b;padding:4px 7px;
+  }
+  .act:hover{background:#fef2f2;border-color:#fecaca;color:#b91c1c}
+
+  /* ---------- archive ---------- */
+  .arch-row{display:flex;gap:14px;align-items:center;justify-content:space-between;
+    padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .arch-row:last-child{border-bottom:0}
+  .arch-main{font-size:12.5px;line-height:1.5;min-width:0}
+  .arch-main b{font-weight:700}
+  .arch-side{display:flex;gap:10px;align-items:center;flex:0 0 auto}
+  .arch-item{border:1px solid var(--line);border-radius:9px;padding:2px 12px;margin-bottom:10px;background:#fff}
+  .arch-item:last-child{margin-bottom:0}
+
+  /* ---------- modal ---------- */
+  .modal-backdrop{
+    position:fixed;inset:0;background:rgba(15,23,42,.45);display:grid;place-items:center;
+    padding:18px;z-index:50;
+  }
+  .modal-backdrop[hidden]{display:none}
+  .modal{
+    background:#fff;border-radius:12px;padding:18px;width:min(430px,100%);
+    box-shadow:0 20px 60px rgba(15,23,42,.3);
+  }
+  .modal h3{margin:0 0 4px;font-size:15px}
+  .modal .lbl{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.08em;
+    color:var(--soft);font-weight:700;margin:12px 0 4px}
+  .modal textarea{
+    width:100%;min-height:74px;padding:8px 10px;border:1px solid var(--line);
+    border-radius:7px;font:inherit;font-size:13px;resize:vertical;
+  }
+  .modal textarea:focus{outline:2px solid #99d5cd;outline-offset:0;border-color:var(--brand)}
+  .modal textarea.invalid{border-color:#dc2626;background:#fef2f2}
+  .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+
+  /* ---------- toast ---------- */
+  #toast{
+    position:fixed;left:50%;bottom:22px;transform:translate(-50%,20px);
+    background:#0f172a;color:#e2e8f0;font-size:12.5px;font-weight:600;
+    padding:9px 16px;border-radius:8px;opacity:0;pointer-events:none;
+    transition:opacity .15s ease,transform .15s ease;z-index:80;max-width:90vw;text-align:center;
+  }
+  #toast.show{opacity:1;transform:translate(-50%,0)}
+
+  @media (max-width:900px){
+    main{padding:12px}
+    thead th,tbody td{padding-left:7px;padding-right:7px}
+    .search{min-width:0;flex:1 1 160px}
+    .panel-head{gap:10px}
+  }
+</style>
+</head>
+<body>
+
+<div class="demo-bar">
+  <span>DEMO ONLY — static mockup, not connected to the database. Nothing here is saved.</span>
+  <span class="v">Balance bar at the bottom · <a href="treatment-record-paper.html">print layout →</a> · <a href="intake-form.html">patient intake →</a> · <a href="informed-consent.html">informed consent →</a></span>
+</div>
+
+<header class="head">
+  <div class="logo">GDC</div>
+  <div>
+    <div class="clinic">GONZAGA DENTAL CLINIC</div>
+    <div class="subtitle">Patient Ledger</div>
+  </div>
+  <span class="doc-badge">TREATMENT RECORD</span>
+  <div class="demo-patient">
+    <div><b>Patient</b>Demo Patient</div>
+    <div><b>Age</b>17</div>
+    <div><b>Sex</b>M</div>
+    <div><b>Date</b><span id="todayLabel"></span></div>
+  </div>
+</header>
+
+<main>
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <h2 class="panel-title">Treatment record</h2>
+        <p class="hint" id="rowCount">—</p>
+      </div>
+      <div class="toolbar">
+        <div class="seg" id="roleSeg">
+          <button type="button" data-role="secretary" class="on">Secretary</button>
+          <button type="button" data-role="dentist">Dentist</button>
+          <button type="button" data-role="admin">Admin</button>
+        </div>
+        <input id="search" class="search" type="search" placeholder="Search procedure, tooth, dentist…">
+        <button type="button" class="btn" id="archiveToggle">
+          Archived <span class="count" id="archCount">0</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <colgroup>
+          <col style="width:98px">
+          <col style="width:80px">
+          <col>
+          <col style="width:132px">
+          <col style="width:98px">
+          <col style="width:88px">
+          <col style="width:98px">
+          <col style="width:110px">
+          <col style="width:78px">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Tooth No./s</th>
+            <th>Procedure</th>
+            <th>Dentist/s</th>
+            <th class="r">Charged</th>
+            <th class="r">Paid</th>
+            <th class="r">Balance</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+
+        <!-- pinned entry row: always at the top of the ledger -->
+        <tbody id="entryBody">
+          <tr class="entry">
+            <td><input id="nDate" class="field" type="date"></td>
+            <td><input id="nTooth" class="field" placeholder="e.g. 16"></td>
+            <td><input id="nProc" class="field" placeholder="Procedure…"></td>
+            <td>
+              <select id="nDentist" class="field"></select>
+              <input id="nDentistOther" class="field" placeholder="Dentist name" style="display:none;margin-top:4px">
+            </td>
+            <td><input id="nCharged" class="field r" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"></td>
+            <td><input id="nPaid" class="field r" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"></td>
+            <td class="num muted" id="nPreview">—</td>
+            <td colspan="2"><button type="button" class="btn btn-primary" id="addBtn">Add entry</button></td>
+          </tr>
+        </tbody>
+
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+
+    <div class="balance-bar">
+      <div class="b"><small>Total charged</small><b id="tCharged">₱0</b></div>
+      <div class="b"><small>Total paid</small><b id="tPaid">₱0</b></div>
+      <div class="b owed"><small>Balance owed</small><b id="tBal">₱0</b></div>
+    </div>
+  </section>
+
+  <section class="panel" id="archivePanel" hidden>
+    <div class="panel-head">
+      <h2 class="panel-title">Archived entries</h2>
+      <span class="hint">Restore window: 30 days · admin only · excluded from totals</span>
+    </div>
+    <div class="panel-body" id="archList"></div>
+  </section>
+</main>
+
+<div class="modal-backdrop" id="modal" hidden>
+  <div class="modal">
+    <h3>Archive this entry?</h3>
+    <p class="hint" id="modalDesc"></p>
+    <label class="lbl" for="reason">Reason for archiving</label>
+    <textarea id="reason" placeholder="e.g. wrong patient, duplicate entry, cancelled treatment…"></textarea>
+    <div class="modal-actions">
+      <button type="button" class="btn" id="cancelArch">Cancel</button>
+      <button type="button" class="btn btn-danger" id="confirmArch">Archive entry</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ------------------------------------------------------------------ */
+/* Config & state                                                      */
+/* ------------------------------------------------------------------ */
+const STAFF = ['Dr. F. Galve', 'Dr. Celis', 'Dr. France', 'Dr. Jam'];
+const ROLE_LABEL = { secretary:'Secretary', dentist:'Dr. Dentist', admin:'Admin' };
+const RESTORE_DAYS = 30;
+
+let role = 'secretary';
+let search = '';
+let archiveOpen = false;
+let seq = 100;
+
+const records = [
+  { id:'t1', date:'2023-03-18', tooth:'', procedure:'Orthodontic appliance package (braces)',
+    dentist:'Dr. F. Galve', charged:36000, paid:5000,
+    status:'verified', verified_by:'Secretary', verified_at:'2023-03-18',
+    updated_by:null, updated_at:null, deleted_at:null, deleted_by:null, delete_reason:null },
+
+  { id:'t2', date:'2023-09-04', tooth:'', procedure:'OP — change ligature',
+    dentist:'Dr. F. Galve', charged:0, paid:1000,
+    status:'verified', verified_by:'Secretary', verified_at:'2023-09-04',
+    updated_by:null, updated_at:null, deleted_at:null, deleted_by:null, delete_reason:null },
+
+  { id:'t3', date:'2023-10-02', tooth:'', procedure:'OP — change ligature',
+    dentist:'Dr. F. Galve', charged:0, paid:1000,
+    status:'draft', verified_by:null, verified_at:null,
+    updated_by:null, updated_at:null, deleted_at:null, deleted_by:null, delete_reason:null },
+];
+
+/* ------------------------------------------------------------------ */
+/* Helpers                                                             */
+/* ------------------------------------------------------------------ */
+const money = n => '₱' + Number(n || 0).toLocaleString('en-PH', { maximumFractionDigits:2 });
+const today = () => new Date().toISOString().slice(0, 10);
+
+function fmtDate(d){
+  if (!d) return '';
+  const parts = String(d).slice(0, 10).split('-');
+  if (parts.length !== 3) return String(d);
+  const dt = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  return dt.toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+}
+
+const byId = id => records.find(r => r.id === id);
+const activeRecords = () => records.filter(r => !r.deleted_at);
+const archivedRecords = () => records.filter(r => r.deleted_at);
+
+function daysLeft(r){
+  const ms = Date.now() - new Date(r.deleted_at).getTime();
+  return Math.max(0, RESTORE_DAYS - Math.floor(ms / 86400000));
+}
+
+/* chronological order + running balance over the WHOLE ledger */
+function withBalances(){
+  const sorted = activeRecords().slice().sort((a, b) =>
+    a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  let running = 0;
+  return sorted.map(r => {
+    running += (r.charged || 0) - (r.paid || 0);
+    return Object.assign({}, r, { balance: running });
+  });
+}
+
+let toastTimer;
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+/* ------------------------------------------------------------------ */
+/* Transitions                                                         */
+/* ------------------------------------------------------------------ */
+function commit(rec, field, value){
+  const changed = String(rec[field] ?? '') !== String(value ?? '');
+  if (!changed){ render(); return; }
+
+  rec[field] = value;
+
+  if (rec.status === 'verified'){
+    if (role === 'dentist'){
+      rec.updated_by = ROLE_LABEL.dentist;
+      rec.updated_at = today();
+      toast('Edited by dentist — entry stays verified.');
+    } else {
+      rec.status = 'draft';
+      rec.verified_by = null;
+      rec.verified_at = null;
+      rec.updated_by = null;
+      rec.updated_at = null;
+      toast('Edited after verification — reverted to draft.');
+    }
+  }
+  render();
+}
+
+function verify(id){
+  const r = byId(id);
+  if (!r) return;
+  r.status = 'verified';
+  r.verified_by = ROLE_LABEL[role];
+  r.verified_at = today();
+  r.updated_by = null;
+  r.updated_at = null;
+  toast('Verified by ' + ROLE_LABEL[role] + ' — matches the paper.');
+  render();
+}
+
+/* ------------------------------------------------------------------ */
+/* Table rendering                                                     */
+/* ------------------------------------------------------------------ */
+function matches(r){
+  if (!search) return true;
+  const q = search.toLowerCase();
+  return [r.date, fmtDate(r.date), r.tooth, r.procedure, r.dentist]
+    .join(' ').toLowerCase().includes(q);
+}
+
+function editableCell(rec, field, display, extra){
+  const td = document.createElement('td');
+  td.className = 'editable ' + (extra || '');
+  td.dataset.field = field;
+  td.textContent = display;
+  td.title = 'Click to edit';
+  td.addEventListener('click', () => startEdit(td, rec, field));
+  return td;
+}
+
+function startEdit(td, rec, field){
+  if (td.querySelector('input,select')) return;
+  if (field === 'dentist'){ dentistEditor(td, rec, field); return; }
+
+  const cur = rec[field];
+  const input = document.createElement('input');
+  input.className = 'cell-input';
+  if (field === 'charged' || field === 'paid'){
+    input.type = 'number'; input.min = '0'; input.step = '0.01'; input.inputMode = 'decimal';
+  } else if (field === 'date'){
+    input.type = 'date';
+  } else {
+    input.type = 'text';
+  }
+  input.value = (cur === null || cur === undefined) ? '' : cur;
+
+  td.textContent = '';
+  td.appendChild(input);
+  input.focus();
+  if (input.select) input.select();
+
+  let done = false;
+  const finish = save => {
+    if (done) return;
+    done = true;
+    if (!save){ render(); return; }
+    let v = input.value;
+    if (field === 'charged' || field === 'paid') v = Number(v || 0);
+    if (field === 'date' && !v){ render(); return; }
+    commit(rec, field, v);
+  };
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter'){ e.preventDefault(); finish(true); }
+    if (e.key === 'Escape'){ e.preventDefault(); finish(false); }
+  });
+  input.addEventListener('blur', () => finish(true));
+}
+
+function dentistEditor(td, rec, field){
+  const cur = rec[field] || '';
+  const known = STAFF.includes(cur);
+
+  td.textContent = '';
+
+  const sel = document.createElement('select');
+  sel.className = 'cell-input';
+  sel.innerHTML = STAFF.map(s => '<option' + (s === cur ? ' selected' : '') + '>' + s + '</option>').join('')
+    + '<option value="__other"' + (known ? '' : ' selected') + '>Other…</option>';
+  td.appendChild(sel);
+
+  const other = document.createElement('input');
+  other.className = 'cell-input';
+  other.placeholder = 'Dentist name';
+  other.value = known ? '' : cur;
+  other.style.display = known ? 'none' : 'block';
+  other.style.marginTop = '4px';
+  td.appendChild(other);
+
+  sel.addEventListener('change', () => {
+    if (sel.value === '__other'){ other.style.display = 'block'; other.focus(); return; }
+    commit(rec, field, sel.value);
+  });
+
+  other.addEventListener('keydown', e => {
+    if (e.key === 'Enter'){ e.preventDefault(); commit(rec, field, other.value.trim() || cur); }
+    if (e.key === 'Escape'){ e.preventDefault(); render(); }
+  });
+  other.addEventListener('blur', () => {
+    if (sel.value === '__other') commit(rec, field, other.value.trim() || cur);
+  });
+
+  if (!known) other.focus();
+}
+
+function statusCell(r){
+  const td = document.createElement('td');
+
+  if (r.status === 'verified'){
+    const chip = document.createElement('span');
+    chip.className = 'chip verified';
+    chip.textContent = '✓ Verified';
+    const meta = document.createElement('div');
+    meta.className = 'stamp';
+    meta.textContent = r.updated_by
+      ? 'Updated by ' + r.updated_by + ' · ' + fmtDate(r.updated_at)
+      : r.verified_by + ' · ' + fmtDate(r.verified_at);
+    td.append(chip, meta);
+  } else {
+    const chip = document.createElement('span');
+    chip.className = 'chip draft';
+    chip.textContent = 'Draft';
+    const link = document.createElement('button');
+    link.type = 'button';
+    link.className = 'link';
+    link.textContent = 'Verify';
+    link.addEventListener('click', () => verify(r.id));
+    td.append(chip, link);
+  }
+  return td;
+}
+
+function actionsCell(r){
+  const td = document.createElement('td');
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'act';
+  btn.textContent = 'Archive';
+  btn.title = 'Archive this entry';
+  btn.addEventListener('click', () => askArchive(r.id));
+  td.appendChild(btn);
+  return td;
+}
+
+function renderRows(){
+  const body = document.getElementById('rows');
+  body.innerHTML = '';
+
+  const list = withBalances().filter(matches);
+
+  if (!list.length){
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 9;
+    td.className = 'muted';
+    td.style.textAlign = 'center';
+    td.style.padding = '22px 8px';
+    td.textContent = search ? 'No entries match “' + search + '”.' : 'No treatment entries yet.';
+    tr.appendChild(td);
+    body.appendChild(tr);
+    return;
+  }
+
+  list.forEach(r => {
+    const tr = document.createElement('tr');
+    if (r.status === 'draft') tr.classList.add('is-draft');
+
+    tr.appendChild(editableCell(r, 'date', fmtDate(r.date), 'nowrap'));
+    tr.appendChild(editableCell(r, 'tooth', r.tooth || '—', 'nowrap'));
+    tr.appendChild(editableCell(r, 'procedure', r.procedure || '', ''));
+    tr.appendChild(editableCell(r, 'dentist', r.dentist || '—', ''));
+
+    tr.appendChild(editableCell(r, 'charged', money(r.charged), 'num'));
+    tr.appendChild(editableCell(r, 'paid', money(r.paid), 'num'));
+
+    const bal = document.createElement('td');
+    bal.className = 'num strong';
+    bal.textContent = money(r.balance);
+    tr.appendChild(bal);
+
+    tr.appendChild(statusCell(r));
+    tr.appendChild(actionsCell(r));
+
+    body.appendChild(tr);
+  });
+}
+
+function renderTotals(){
+  const act = activeRecords();
+  const charged = act.reduce((s, r) => s + (r.charged || 0), 0);
+  const paid = act.reduce((s, r) => s + (r.paid || 0), 0);
+
+  document.getElementById('tCharged').textContent = money(charged);
+  document.getElementById('tPaid').textContent = money(paid);
+  document.getElementById('tBal').textContent = money(charged - paid);
+
+  const drafts = act.filter(r => r.status === 'draft').length;
+  document.getElementById('rowCount').textContent =
+    act.length + (act.length === 1 ? ' entry' : ' entries')
+    + ' · ' + drafts + ' draft' + (drafts === 1 ? '' : 's')
+    + ' · running balance on the last row';
+}
+
+function renderArchive(){
+  const host = document.getElementById('archList');
+  host.innerHTML = '';
+
+  const list = archivedRecords().sort((a, b) => b.deleted_at.localeCompare(a.deleted_at));
+  document.getElementById('archCount').textContent = String(list.length);
+
+  if (!list.length){
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = 'Nothing archived. Archived entries are hidden from the ledger and the totals, and can be restored by an admin within 30 days.';
+    host.appendChild(p);
+    return;
+  }
+
+  list.forEach(r => {
+    const left = daysLeft(r);
+
+    const item = document.createElement('div');
+    item.className = 'arch-item';
+
+    const row = document.createElement('div');
+    row.className = 'arch-row';
+
+    const main = document.createElement('div');
+    main.className = 'arch-main';
+    const b = document.createElement('b');
+    b.textContent = fmtDate(r.date);
+    main.appendChild(b);
+    main.appendChild(document.createTextNode(
+      ' · ' + (r.procedure || '(no procedure)') + ' · ' + (r.dentist || '—')));
+
+    const detail = document.createElement('div');
+    detail.className = 'hint';
+    detail.textContent = 'Charged ' + money(r.charged) + ' · Paid ' + money(r.paid)
+      + ' · archived by ' + r.deleted_by + ' · reason: “' + r.delete_reason + '”';
+    main.appendChild(detail);
+
+    const side = document.createElement('div');
+    side.className = 'arch-side';
+
+    const chip = document.createElement('span');
+    chip.className = 'chip ' + (left > 0 ? 'gone' : 'draft');
+    chip.textContent = left > 0 ? left + ' day' + (left === 1 ? '' : 's') + ' left' : 'window closed';
+    side.appendChild(chip);
+
+    const restore = document.createElement('button');
+    restore.type = 'button';
+    restore.className = 'btn';
+    restore.textContent = 'Restore';
+    const blocked = left <= 0;
+    if (blocked || role !== 'admin'){
+      restore.disabled = true;
+      restore.title = blocked
+        ? 'Restore window has closed'
+        : 'Only an admin can restore an archived entry';
+    } else {
+      restore.addEventListener('click', () => restoreEntry(r.id));
+    }
+    side.appendChild(restore);
+
+    row.append(main, side);
+    item.appendChild(row);
+    host.appendChild(item);
+  });
+}
+
+function render(){
+  renderRows();
+  renderTotals();
+  renderArchive();
+}
+
+/* ------------------------------------------------------------------ */
+/* Archive flow                                                        */
+/* ------------------------------------------------------------------ */
+let pendingArchive = null;
+
+function askArchive(id){
+  const r = byId(id);
+  if (!r) return;
+  pendingArchive = id;
+
+  document.getElementById('modalDesc').textContent =
+    fmtDate(r.date) + ' · ' + (r.procedure || '(no procedure)') + ' · ' + money(r.charged) + ' charged';
+  const ta = document.getElementById('reason');
+  ta.value = '';
+  ta.classList.remove('invalid');
+
+  document.getElementById('modal').hidden = false;
+  ta.focus();
+}
+
+function closeModal(){
+  document.getElementById('modal').hidden = true;
+  pendingArchive = null;
+}
+
+function confirmArchive(){
+  const ta = document.getElementById('reason');
+  const reason = ta.value.trim();
+  if (!reason){
+    ta.classList.add('invalid');
+    ta.focus();
+    return;
+  }
+  const r = byId(pendingArchive);
+  if (r){
+    r.deleted_at = new Date().toISOString();
+    r.deleted_by = ROLE_LABEL[role];
+    r.delete_reason = reason;
+    toast('Entry archived — excluded from the balance.');
+  }
+  closeModal();
+  render();
+}
+
+function restoreEntry(id){
+  if (role !== 'admin'){ toast('Only an admin can restore.'); return; }
+  const r = byId(id);
+  if (!r) return;
+  if (daysLeft(r) <= 0){ toast('Restore window has closed.'); return; }
+  r.deleted_at = null;
+  r.deleted_by = null;
+  r.delete_reason = null;
+  toast('Entry restored to the ledger.');
+  render();
+}
+
+/* ------------------------------------------------------------------ */
+/* Entry row                                                           */
+/* ------------------------------------------------------------------ */
+function buildEntryDentist(){
+  const sel = document.getElementById('nDentist');
+  sel.innerHTML = STAFF.map(s => '<option>' + s + '</option>').join('')
+    + '<option value="__other">Other…</option>';
+
+  const other = document.getElementById('nDentistOther');
+  sel.addEventListener('change', () => {
+    if (sel.value === '__other'){
+      other.style.display = 'block';
+      other.focus();
+    } else {
+      other.style.display = 'none';
+      other.value = '';
+    }
+  });
+}
+
+function updateEntryPreview(){
+  const act = activeRecords();
+  const outstanding = act.reduce((s, r) => s + (r.charged || 0) - (r.paid || 0), 0);
+  const charged = Number(document.getElementById('nCharged').value || 0);
+  const paid = Number(document.getElementById('nPaid').value || 0);
+  const next = outstanding + charged - paid;
+  document.getElementById('nPreview').textContent = money(next);
+  document.getElementById('nPreview').title = 'Balance after this entry is added';
+}
+
+function addEntry(){
+  const procEl = document.getElementById('nProc');
+  const procedure = procEl.value.trim();
+  if (!procedure){
+    procEl.classList.add('invalid');
+    procEl.focus();
+    toast('Procedure is required.');
+    return;
+  }
+
+  const sel = document.getElementById('nDentist');
+  const otherEl = document.getElementById('nDentistOther');
+  const dentist = sel.value === '__other' ? otherEl.value.trim() : sel.value;
+
+  const rec = {
+    id: 't' + (++seq),
+    date: document.getElementById('nDate').value || today(),
+    tooth: document.getElementById('nTooth').value.trim(),
+    procedure: procedure,
+    dentist: dentist,
+    charged: Number(document.getElementById('nCharged').value || 0),
+    paid: Number(document.getElementById('nPaid').value || 0),
+    status: 'draft',
+    verified_by: null, verified_at: null,
+    updated_by: null, updated_at: null,
+    deleted_at: null, deleted_by: null, delete_reason: null,
+  };
+
+  records.push(rec);
+
+  procEl.value = '';
+  document.getElementById('nTooth').value = '';
+  document.getElementById('nCharged').value = '';
+  document.getElementById('nPaid').value = '';
+  procEl.classList.remove('invalid');
+
+  toast('Entry added as draft — verify it against the paper.');
+  render();
+  updateEntryPreview();
+  procEl.focus();
+}
+
+/* ------------------------------------------------------------------ */
+/* Wiring                                                              */
+/* ------------------------------------------------------------------ */
+document.getElementById('todayLabel').textContent = fmtDate(today());
+document.getElementById('nDate').value = today();
+
+buildEntryDentist();
+
+document.getElementById('addBtn').addEventListener('click', addEntry);
+document.getElementById('nCharged').addEventListener('input', updateEntryPreview);
+document.getElementById('nPaid').addEventListener('input', updateEntryPreview);
+
+['nProc','nTooth','nCharged','nPaid','nDentistOther'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter'){ e.preventDefault(); addEntry(); }
+  });
+});
+
+document.getElementById('search').addEventListener('input', e => {
+  search = e.target.value.trim();
+  renderRows();
+});
+
+document.getElementById('roleSeg').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-role]');
+  if (!btn) return;
+  role = btn.dataset.role;
+  [...document.querySelectorAll('#roleSeg button')].forEach(b => b.classList.toggle('on', b === btn));
+  render();
+  toast('Viewing as ' + ROLE_LABEL[role] + '.');
+});
+
+document.getElementById('archiveToggle').addEventListener('click', () => {
+  archiveOpen = !archiveOpen;
+  document.getElementById('archivePanel').hidden = !archiveOpen;
+  if (archiveOpen) document.getElementById('archivePanel').scrollIntoView({ behavior:'smooth', block:'nearest' });
+});
+
+document.getElementById('cancelArch').addEventListener('click', closeModal);
+document.getElementById('confirmArch').addEventListener('click', confirmArchive);
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target.id === 'modal') closeModal();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !document.getElementById('modal').hidden) closeModal();
+});
+document.getElementById('reason').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); confirmArchive(); }
+});
+
+render();
+updateEntryPreview();
+</script>
+</body>
+</html>

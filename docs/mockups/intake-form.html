@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GDCMAS — Patient Intake &amp; Medical History (DEMO)</title>
+<style>
+  :root{
+    --bg:#eef2f6; --panel:#fff; --line:#d6dee7; --line-soft:#e8eef4;
+    --ink:#111c27; --soft:#58687a;
+    --brand:#006666; --brand-2:#008a8a; --brand-soft:#e3f3f3;
+    --danger:#b91c1c; --danger-soft:#fef2f2;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+
+  /* ---------- demo bar ---------- */
+  .demo-bar{
+    background:#fef3c7;border-bottom:1px solid #fcd34d;color:#78350f;
+    padding:8px 18px;font-size:12px;font-weight:600;
+    display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;justify-content:space-between;
+  }
+  .demo-bar a{color:#78350f;font-weight:800}
+  .demo-bar .v{font-weight:600;opacity:.9}
+
+  /* ---------- mode switch ---------- */
+  .modes{
+    position:sticky;top:0;z-index:30;background:#fff;border-bottom:1px solid var(--line);
+    padding:9px 18px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+  }
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#f8fafc}
+  .seg button{
+    border:0;background:transparent;padding:7px 14px;font:inherit;font-size:12.5px;font-weight:600;
+    color:var(--soft);cursor:pointer;
+  }
+  .seg button + button{border-left:1px solid var(--line)}
+  .seg button.on{background:var(--brand);color:#fff}
+  .modes .spacer{flex:1}
+  .btn{
+    display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;
+    border:1px solid var(--line);background:#fff;font:inherit;font-size:12.5px;font-weight:600;
+    color:var(--ink);cursor:pointer;min-height:36px;
+  }
+  .btn:hover{background:#f1f5f9}
+  .btn-primary{background:var(--brand);border-color:var(--brand);color:#fff}
+  .btn-primary:hover{background:#005454}
+  .btn-ghost{border-color:transparent;color:var(--soft)}
+  .fit-badge{
+    font-size:11.5px;font-weight:800;border-radius:999px;padding:6px 12px;
+    border:1px solid #86efac;background:#f0fdf4;color:#15803d;
+  }
+  .fit-badge.bad{border-color:#fca5a5;background:#fef2f2;color:#b91c1c}
+
+  /* ---------- screen app ---------- */
+  main{padding:18px;max-width:1180px;margin-inline:auto;display:grid;gap:16px}
+
+  .app-head{
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:14px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:14px;
+  }
+  .logo{
+    width:46px;height:46px;border-radius:50%;background:var(--brand);color:#fff;
+    display:grid;place-items:center;font-weight:800;font-size:13px;letter-spacing:.04em;flex:0 0 auto;
+  }
+  .app-title{font-size:16px;font-weight:800;letter-spacing:.01em}
+  .app-sub{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--soft);font-weight:600}
+  .pill{
+    margin-left:auto;font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+    border:1.5px solid var(--brand);color:var(--brand);border-radius:999px;padding:6px 14px;
+  }
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .card-head{
+    padding:12px 16px;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;
+    gap:10px;flex-wrap:wrap;background:#fbfdfe;
+  }
+  .card-head h2{
+    margin:0;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:var(--brand);
+  }
+  .card-head .num{
+    width:22px;height:22px;border-radius:6px;background:var(--brand-soft);color:var(--brand);
+    display:grid;place-items:center;font-size:11px;font-weight:800;flex:0 0 auto;
+  }
+  .card-body{padding:16px}
+
+  .grid{display:grid;gap:12px 14px}
+  .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .span2{grid-column:span 2}
+  .span3{grid-column:span 3}
+  .span4{grid-column:span 4}
+  @media (max-width:900px){
+    .g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .span3,.span4{grid-column:span 2}
+  }
+  @media (max-width:620px){
+    .g2,.g3,.g4{grid-template-columns:1fr}
+    .span2,.span3,.span4{grid-column:span 1}
+  }
+
+  .field{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .field label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--soft)}
+  .field .hint{font-size:10.5px;color:var(--soft);font-weight:400;text-transform:none;letter-spacing:0}
+  .field input,.field select,.field textarea{
+    width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;
+    font:inherit;font-size:13.5px;background:#fff;color:var(--ink);min-height:38px;
+  }
+  .field textarea{min-height:64px;resize:vertical}
+  .field input:focus,.field select:focus,.field textarea:focus{
+    outline:2px solid #9fd6d6;outline-offset:0;border-color:var(--brand);
+  }
+  .field.err input,.field.err select{border-color:var(--danger);background:var(--danger-soft)}
+  .field .msg{font-size:11px;color:var(--danger);font-weight:600;display:none}
+  .field.err .msg{display:block}
+
+  /* ---------- yes / no toggles ---------- */
+  .qs{display:grid;gap:10px}
+  .q{border:1px solid var(--line-soft);border-radius:10px;padding:11px 13px;background:#fcfdfe}
+  .q.on{border-color:#9fd6d6;background:#f4fbfb}
+  .q-top{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+  .q-text{flex:1 1 260px;font-size:13.5px;line-height:1.4;min-width:0}
+  .q-text b{font-weight:700}
+  .q-num{
+    display:inline-grid;place-items:center;width:20px;height:20px;border-radius:5px;
+    background:#eef4f8;color:var(--soft);font-size:11px;font-weight:800;margin-right:7px;vertical-align:1px;
+  }
+  .yn{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex:0 0 auto;background:#fff}
+  .yn button{
+    border:0;background:transparent;padding:7px 16px;font:inherit;font-size:12.5px;font-weight:700;
+    color:var(--soft);cursor:pointer;min-width:56px;
+  }
+  .yn button + button{border-left:1px solid var(--line)}
+  .yn button[aria-pressed="true"][data-v="yes"]{background:var(--brand);color:#fff}
+  .yn button[aria-pressed="true"][data-v="no"]{background:#475569;color:#fff}
+  .detail{display:none;margin-top:10px}
+  .detail.show{display:block}
+  .q-sub{
+    display:flex;gap:12px;align-items:center;flex-wrap:wrap;
+    padding:8px 0;border-bottom:1px dashed var(--line-soft);
+  }
+  .q-sub:last-child{border-bottom:0;padding-bottom:0}
+  .q-sub-text{flex:1 1 220px;font-size:13.5px;min-width:0}
+
+  /* ---------- chips & checkboxes ---------- */
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{
+    display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--line);
+    border-radius:9px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;user-select:none;
+  }
+  .chip:hover{border-color:#9fd6d6}
+  .chip input{accent-color:var(--brand);margin:0;width:15px;height:15px}
+  .chip.sel{border-color:var(--brand);background:var(--brand-soft)}
+
+  .cond-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  @media (max-width:820px){.cond-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media (max-width:520px){.cond-grid{grid-template-columns:1fr}}
+  .cond{
+    display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);
+    border-radius:9px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;user-select:none;
+  }
+  .cond:hover{border-color:#9fd6d6}
+  .cond input{accent-color:var(--brand);margin:0;width:15px;height:15px;flex:0 0 auto}
+  .cond.sel{border-color:var(--brand);background:var(--brand-soft)}
+
+  /* ---------- signature ---------- */
+  .sig-wrap{border:1px dashed #9fd6d6;border-radius:10px;background:#fbfefe;padding:6px}
+  canvas#sig{display:block;width:100%;height:170px;border-radius:7px;background:#fff;touch-action:none;cursor:crosshair}
+  .sig-foot{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+  .sig-foot .hint{font-size:11.5px;color:var(--soft);margin:0}
+  .sig-err{font-size:11.5px;color:var(--danger);font-weight:700;display:none}
+  .sig-err.show{display:block}
+
+  .actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:14px 16px;border-top:1px solid var(--line-soft);background:#fbfdfe}
+
+  /* ---------- json ---------- */
+  pre{
+    margin:0;padding:14px;background:#0f172a;color:#a5f3fc;border-radius:10px;
+    font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto;max-height:320px;
+  }
+
+  /* ---------- toast ---------- */
+  #toast{
+    position:fixed;left:50%;bottom:22px;transform:translate(-50%,20px);
+    background:#0f172a;color:#e2e8f0;font-size:12.5px;font-weight:600;
+    padding:10px 18px;border-radius:9px;opacity:0;pointer-events:none;
+    transition:opacity .15s ease,transform .15s ease;z-index:90;max-width:90vw;text-align:center;
+  }
+  #toast.show{opacity:1;transform:translate(-50%,0)}
+
+  /* =================================================================
+     PRINT SHEET
+     ================================================================= */
+  .sheet-stage{padding:22px 18px 60px}
+  .sheet{
+    display:none;background:#fff;width:min(8.5in,100%);min-height:11in;
+    padding:12mm;margin:0 auto;box-shadow:0 2px 16px rgba(15,23,42,.15);
+    color:#000;font-family:Arial,Helvetica,"Liberation Sans",sans-serif;font-size:9pt;line-height:1.3;
+  }
+  body[data-mode="print"] main{display:none}
+  body[data-mode="print"] .sheet{display:block}
+
+  .sh-head{display:grid;grid-template-columns:1.1in 1fr 1.1in;align-items:center;column-gap:8px}
+  .sh-logo{
+    width:.85in;height:.85in;border:1.2px solid #000;border-radius:50%;
+    display:grid;place-items:center;text-align:center;
+    font:700 5.5pt/1.15 Arial,sans-serif;letter-spacing:.02em;padding:6px;text-transform:uppercase;
+  }
+  .sh-title{text-align:center}
+  .sh-title h1{
+    margin:0;font:700 15pt/1.15 "Times New Roman",Georgia,serif;letter-spacing:.05em;text-transform:uppercase;
+  }
+  .sh-title p{margin:2px 0 0;font-size:7.5pt;letter-spacing:.16em;text-transform:uppercase}
+  .sh-no{
+    justify-self:end;border:1px solid #000;padding:4px 8px;font-size:8pt;font-weight:700;min-width:1.05in;
+  }
+  .sh-badge{
+    width:max-content;margin:7pt auto 9pt;border:1.2px solid #000;border-radius:999px;
+    padding:2.5pt 20pt;font:700 9pt/1.2 Arial,sans-serif;letter-spacing:.2em;text-transform:uppercase;
+  }
+
+  .sh h3{
+    margin:7pt 0 4pt;font:800 8pt/1.2 Arial,sans-serif;letter-spacing:.1em;text-transform:uppercase;
+    border-bottom:1px solid #000;padding-bottom:2pt;
+  }
+  .sh h3:first-of-type{margin-top:2pt}
+
+  .pf{display:flex;align-items:flex-end;gap:4pt;min-width:0}
+  .pf .l{font-size:8pt;white-space:nowrap;font-weight:400}
+  .pf .ln{flex:1;border-bottom:1px solid #000;min-height:9pt;min-width:12pt}
+  .pg{display:grid;gap:3.5pt 12pt}
+  .pg2{grid-template-columns:1fr 1fr}
+  .pg3{grid-template-columns:repeat(3,1fr)}
+  .pg4{grid-template-columns:repeat(4,1fr)}
+  .span2{grid-column:span 2}
+  .span3{grid-column:span 3}
+  .span4{grid-column:span 4}
+
+  .sh-sub{margin:4pt 0 0;font-size:7.5pt;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+
+  .qrow{display:flex;gap:6pt;align-items:baseline;margin-bottom:2.2pt;font-size:8pt}
+  .qrow .n{width:12pt;flex:0 0 12pt;font-weight:700}
+  .qrow .t{flex:1 1 auto;min-width:0}
+  .qrow .t .ul{display:inline-block;min-width:1.1in;border-bottom:1px solid #000}
+  .qrow .y{white-space:nowrap;flex:0 0 auto;font-weight:700}
+
+  .cb{
+    display:inline-block;width:7pt;height:7pt;border:1px solid #000;vertical-align:-.5pt;margin-right:2pt;
+  }
+
+  .cbgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.3pt 10pt;font-size:7.6pt;line-height:1.25}
+  .cbgrid span{white-space:nowrap}
+
+  .sh-foot{margin-top:12pt;display:flex;justify-content:flex-end}
+  .sh-sign{width:2.6in;text-align:center}
+  .sh-sign .line{border-bottom:1px solid #000;height:22pt}
+  .sh-sign .cap{font-size:7.5pt;margin-top:2pt;font-weight:700}
+
+  @page{size:letter portrait;margin:12mm}
+  @media print{
+    body{background:#fff}
+    .demo-bar,.modes,.toast{display:none !important}
+    main{display:none !important}
+    .sheet-stage{padding:0}
+    .sheet{
+      display:block !important;box-shadow:none;width:auto;min-height:0;padding:0;margin:0;
+    }
+  }
+</style>
+</head>
+<body data-mode="screen">
+
+<div class="demo-bar" id="demoBar">
+  <span>DEMO ONLY — static mockup, not connected to the database. Nothing here is saved.</span>
+  <span class="v">Chart <a href="index.html">1</a> · Ledger <a href="treatment-record.html">2</a> · Print sheet <a href="treatment-record-paper.html">3</a> · Consent <a href="informed-consent.html">5</a></span>
+</div>
+
+<div class="modes">
+  <div class="seg" id="modeSeg" role="group" aria-label="View">
+    <button type="button" data-mode="screen" class="on">Screen form</button>
+    <button type="button" data-mode="print">Print sheet</button>
+  </div>
+  <span class="spacer"></span>
+  <span class="fit-badge" id="fitBadge" hidden></span>
+  <button type="button" class="btn" id="btnPrint">Print / Save PDF</button>
+</div>
+
+<main>
+
+  <div class="app-head">
+    <div class="logo">GDC</div>
+    <div>
+      <div class="app-title">Gonzaga Dental Clinic</div>
+      <div class="app-sub">Patient intake</div>
+    </div>
+    <span class="pill">Patient Intake &amp; Medical History</span>
+  </div>
+
+  <!-- ============ 1. PERSONAL DETAILS ============ -->
+  <section class="card">
+    <div class="card-head"><span class="num">1</span><h2>Patient information record</h2></div>
+    <div class="card-body">
+      <div class="grid g4">
+        <div class="field" id="fLast">
+          <label for="lastName">Last name <span class="hint">required</span></label>
+          <input id="lastName" autocomplete="family-name" placeholder="Dela Cruz">
+          <span class="msg">Last name is required.</span>
+        </div>
+        <div class="field" id="fFirst">
+          <label for="firstName">First name <span class="hint">required</span></label>
+          <input id="firstName" autocomplete="given-name" placeholder="Juan">
+          <span class="msg">First name is required.</span>
+        </div>
+        <div class="field">
+          <label for="middleName">Middle name</label>
+          <input id="middleName" autocomplete="additional-name" placeholder="Santos">
+        </div>
+        <div class="field">
+          <label for="nickname">Nickname(s)</label>
+          <input id="nickname" placeholder="Juan">
+        </div>
+
+        <div class="field">
+          <label for="birthdate">Birthdate <span class="hint">mm/dd/yyyy</span></label>
+          <input id="birthdate" type="date">
+        </div>
+        <div class="field">
+          <label for="age">Age</label>
+          <input id="age" type="number" min="0" max="130" placeholder="auto">
+        </div>
+        <div class="field">
+          <label for="sex">Sex (M/F)</label>
+          <select id="sex">
+            <option value="">Select…</option>
+            <option value="M">M — Male</option>
+            <option value="F">F — Female</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="civilStatus">Civil status</label>
+          <select id="civilStatus">
+            <option value="">Select…</option>
+            <option>Single</option><option>Married</option><option>Widowed</option>
+            <option>Separated</option><option>Annulled</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="religion">Religion</label>
+          <input id="religion" placeholder="Roman Catholic">
+        </div>
+        <div class="field">
+          <label for="nationality">Nationality</label>
+          <input id="nationality" placeholder="Filipino">
+        </div>
+        <div class="field span2">
+          <label for="birthplace">Birthplace</label>
+          <input id="birthplace" placeholder="City / municipality, province">
+        </div>
+
+        <div class="field span2">
+          <label for="address">Home address</label>
+          <input id="address" placeholder="House no., street, barangay, city">
+        </div>
+        <div class="field">
+          <label for="homeNo">Home no.</label>
+          <input id="homeNo" inputmode="tel" placeholder="(033) 000 0000">
+        </div>
+        <div class="field" id="fMobile">
+          <label for="mobile">Cel / mobile no. <span class="hint">required</span></label>
+          <input id="mobile" inputmode="tel" placeholder="0917 000 0000">
+          <span class="msg">A contact number is required.</span>
+        </div>
+
+        <div class="field span2">
+          <label for="email">Email address</label>
+          <input id="email" type="email" placeholder="name@example.com">
+        </div>
+        <div class="field">
+          <label for="occupation">Occupation</label>
+          <input id="occupation" placeholder="Student">
+        </div>
+        <div class="field">
+          <label for="officeNo">Office no.</label>
+          <input id="officeNo" inputmode="tel" placeholder="(033) 000 0000">
+        </div>
+
+        <div class="field">
+          <label for="faxNo">Fax no.</label>
+          <input id="faxNo" inputmode="tel" placeholder="(033) 000 0000">
+        </div>
+        <div class="field">
+          <label for="insurance">Dental insurance</label>
+          <input id="insurance" placeholder="Company / policy no.">
+        </div>
+        <div class="field span2">
+          <label for="effectiveDate">Effective date</label>
+          <input id="effectiveDate" type="date">
+        </div>
+
+        <div class="field span4" style="border-top:1px solid var(--line-soft);padding-top:12px;margin-top:2px">
+          <label>For patients below 18 — parent / guardian</label>
+        </div>
+        <div class="field span2">
+          <label for="guardianName">Parent / guardian name</label>
+          <input id="guardianName" placeholder="Full name">
+        </div>
+        <div class="field">
+          <label for="guardianOccupation">Guardian occupation</label>
+          <input id="guardianOccupation" placeholder="Occupation">
+        </div>
+        <div class="field">
+          <label for="guardianEmail">Guardian email</label>
+          <input id="guardianEmail" type="email" placeholder="name@example.com">
+        </div>
+
+        <div class="field span2">
+          <label for="referrer">Whom may we thank for referring you?</label>
+          <input id="referrer" placeholder="Name of person / clinic / advertisement">
+        </div>
+        <div class="field span2">
+          <label for="reason">What is your reason for dental consultation?</label>
+          <input id="reason" placeholder="Toothache, cleaning, braces, check-up…">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 2. DENTAL HISTORY ============ -->
+  <section class="card">
+    <div class="card-head"><span class="num">2</span><h2>Dental history</h2></div>
+    <div class="card-body">
+      <div class="grid g2">
+        <div class="field">
+          <label for="prevDentist">Previous dentist (Dr.)</label>
+          <input id="prevDentist" placeholder="Dr. —">
+        </div>
+        <div class="field">
+          <label for="lastVisit">Last dental visit</label>
+          <input id="lastVisit" type="date">
+        </div>
+        <div class="field span2">
+          <label for="prevDentistOffice">Previous dentist office address</label>
+          <input id="prevDentistOffice" placeholder="Clinic address (optional)">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 3. MEDICAL HISTORY ============ -->
+  <section class="card">
+    <div class="card-head"><span class="num">3</span><h2>Medical history</h2></div>
+    <div class="card-body">
+
+      <div class="grid g4" style="margin-bottom:16px">
+        <div class="field span2">
+          <label for="physName">Name of physician</label>
+          <input id="physName" placeholder="Dr. —">
+        </div>
+        <div class="field">
+          <label for="physSpec">Specialty</label>
+          <input id="physSpec" placeholder="Internal medicine">
+        </div>
+        <div class="field">
+          <label for="physNo">Office number</label>
+          <input id="physNo" inputmode="tel" placeholder="(033) 000 0000">
+        </div>
+        <div class="field span4">
+          <label for="physAddr">Office address</label>
+          <input id="physAddr" placeholder="Clinic / hospital address">
+        </div>
+      </div>
+
+      <div class="qs" id="questions"></div>
+
+      <!-- 8. allergies -->
+      <div class="q" style="margin-top:10px">
+        <div class="q-top">
+          <div class="q-text"><span class="q-num">8</span><b>Allergies</b> — are you allergic to any of the following? Check all that apply.</div>
+        </div>
+        <div class="chips" id="allergyChips" style="margin-top:10px"></div>
+        <div class="field" style="margin-top:10px;max-width:420px">
+          <label for="allergyOther">Other allergy</label>
+          <input id="allergyOther" placeholder="Specify…">
+        </div>
+      </div>
+
+      <!-- 9. bleeding -->
+      <div class="q" style="margin-top:10px">
+        <div class="q-top">
+          <div class="q-text"><span class="q-num">9</span><b>Bleeding problems?</b> — prolonged bleeding, bleeding gums, bleeding disorder</div>
+          <div class="yn" data-yn="bleeding"></div>
+        </div>
+        <div class="detail" id="bleedDetail">
+          <div class="field" style="max-width:420px">
+            <label for="bleedingTime">Bleeding time / details</label>
+            <input id="bleedingTime" placeholder="e.g. 2 min — or describe the problem">
+          </div>
+        </div>
+      </div>
+
+      <!-- 10. women only -->
+      <div class="q" style="margin-top:10px" id="womenBlock" hidden>
+        <div class="q-top">
+          <div class="q-text"><span class="q-num">10</span><b>For women only</b> <span class="hint" style="font-size:11.5px;color:var(--soft)">— shown because sex is F</span></div>
+        </div>
+        <div style="margin-top:8px">
+          <div class="q-sub"><span class="q-sub-text">Are you pregnant?</span><div class="yn" data-yn="pregnant"></div></div>
+          <div class="q-sub"><span class="q-sub-text">Are you nursing?</span><div class="yn" data-yn="nursing"></div></div>
+          <div class="q-sub"><span class="q-sub-text">Are you taking birth control pills?</span><div class="yn" data-yn="pills"></div></div>
+        </div>
+      </div>
+
+      <!-- 11 + 12 -->
+      <div class="grid g4" style="margin-top:10px">
+        <div class="field">
+          <label for="bloodType">11. Blood type</label>
+          <select id="bloodType">
+            <option value="">Select…</option>
+            <option>A+</option><option>A−</option><option>B+</option><option>B−</option>
+            <option>AB+</option><option>AB−</option><option>O+</option><option>O−</option>
+            <option>Unknown</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="bloodPressure">12. Blood pressure</label>
+          <input id="bloodPressure" placeholder="120 / 80">
+        </div>
+        <div class="field span2">
+          <label for="medicalNotes">Notes for the dentist</label>
+          <input id="medicalNotes" placeholder="Anything else the dentist should know">
+        </div>
+      </div>
+
+      <!-- 13. conditions -->
+      <div class="q" style="margin-top:10px">
+        <div class="q-top">
+          <div class="q-text"><span class="q-num">13</span><b>Do you or have you had any of the following?</b> Check which apply.</div>
+          <span class="hint" id="condCount" style="font-size:11.5px;color:var(--soft);font-weight:700"></span>
+        </div>
+        <div class="cond-grid" id="condGrid" style="margin-top:10px"></div>
+        <div class="field" id="condOtherWrap" style="margin-top:10px;max-width:420px" hidden>
+          <label for="condOther">Other condition — please specify</label>
+          <input id="condOther" placeholder="Specify…">
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ SIGNATURE ============ -->
+  <section class="card">
+    <div class="card-head"><span class="num">✓</span><h2>Patient / guardian signature</h2></div>
+    <div class="card-body">
+      <div class="sig-wrap">
+        <canvas id="sig"></canvas>
+      </div>
+      <div class="sig-foot">
+        <button type="button" class="btn btn-ghost" id="clearSig">Clear canvas</button>
+        <p class="hint">Sign with a finger, stylus, or mouse. The signature is required before submitting.</p>
+        <span class="sig-err" id="sigErr">A signature is required.</span>
+      </div>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn" id="btnPreview">Preview record</button>
+      <button type="button" class="btn btn-primary" id="btnSubmit">Submit intake record</button>
+    </div>
+  </section>
+
+  <section class="card" id="jsonCard" hidden>
+    <div class="card-head"><h2>What would be saved</h2></div>
+    <pre id="json">—</pre>
+  </section>
+
+</main>
+
+<!-- =================================================================
+     PRINT SHEET
+     ================================================================= -->
+<div class="sheet-stage">
+  <div class="sheet" id="sheet">
+
+    <div class="sh-head">
+      <div class="sh-logo">Philippine<br>Dental<br>Association</div>
+      <div class="sh-title">
+        <h1>Gonzaga Dental Clinic</h1>
+        <p>Patient information &amp; medical history</p>
+      </div>
+      <div class="sh-no">No. ______</div>
+    </div>
+
+    <div class="sh-badge">Dental Chart</div>
+
+    <h3>1 · Patient information record</h3>
+    <div class="pg pg4">
+      <div class="pf span2"><span class="l">Name (Last, First, Middle)</span><span class="ln"></span></div>
+      <div class="pf"><span class="l">Birthdate (mm/dd/yyyy)</span><span class="ln"></span></div>
+      <div class="pf"><span class="l">Age</span><span class="ln"></span></div>
+
+      <div class="pf"><span class="l">Sex (M/F)</span><span class="ln"></span></div>
+      <div class="pf"><span class="l">Civil status</span><span class="ln"></span></div>
+      <div class="pf"><span class="l">Religion</span><span class="ln"></span></div>
+      <div class="pf"><span class="l">Nationality</span><span class="ln"></span></div>
+
+      <div class="pf span2"><span class="l">Birthplace</span><span class="ln"></span></div>
+      <div class="pf"><span class="l">Nickname(s)</span><span class="ln"></span></div>
+      <div class="pf"><span class="l">Occupation</span><span class="ln"></span></div>
+
+      <div class="pf span2"><span class="l">Home address</span><span class="ln"></span></div>
+      <div class="pf"><span class="l">Home no.</span><span class="ln"></span></div>
+      <div class="pf"><span class="l">Cel / mobile no.</span><span class="ln"></span></div>
+
+      <div class="pf span2"><span class="l">Email address</span><span class="ln"></span></div>
+      <div class="pf"><span class="l">Office no.</span><span class="ln"></span></div>
+      <div class="pf"><span class="l">Fax no.</span><span class="ln"></span></div>
+
+      <div class="pf span2"><span class="l">Dental insurance</span><span class="ln"></span></div>
+      <div class="pf span2"><span class="l">Effective date</span><span class="ln"></span></div>
+
+      <div class="pf span2"><span class="l">Whom may we thank for referring you?</span><span class="ln"></span></div>
+      <div class="pf span2"><span class="l">Reason for dental consultation</span><span class="ln"></span></div>
+    </div>
+
+    <p class="sh-sub">For patients below 18 — parent / guardian</p>
+    <div class="pg pg3">
+      <div class="pf"><span class="l">Name</span><span class="ln"></span></div>
+      <div class="pf"><span class="l">Occupation</span><span class="ln"></span></div>
+      <div class="pf"><span class="l">Email address</span><span class="ln"></span></div>
+    </div>
+
+    <h3>2 · Dental history</h3>
+    <div class="pg pg4">
+      <div class="pf"><span class="l">Previous dentist (Dr.)</span><span class="ln"></span></div>
+      <div class="pf"><span class="l">Last dental visit</span><span class="ln"></span></div>
+      <div class="pf span2"><span class="l">Office address</span><span class="ln"></span></div>
+    </div>
+
+    <h3>3 · Medical history</h3>
+    <div class="pg pg4">
+      <div class="pf span2"><span class="l">Name of physician (Dr.)</span><span class="ln"></span></div>
+      <div class="pf"><span class="l">Specialty, if applicable</span><span class="ln"></span></div>
+      <div class="pf"><span class="l">Office number</span><span class="ln"></span></div>
+      <div class="pf span4"><span class="l">Office address</span><span class="ln"></span></div>
+    </div>
+
+    <div style="margin-top:5pt">
+      <div class="qrow"><span class="n">1.</span><span class="t">Are you in good health?</span><span class="y">Yes <i class="cb"></i> &nbsp;No <i class="cb"></i></span></div>
+      <div class="qrow"><span class="n">2.</span><span class="t">Are you under medical treatment now? If so, what condition is being treated?</span><span class="y">Yes <i class="cb"></i> &nbsp;No <i class="cb"></i></span></div>
+      <div class="qrow"><span class="n">3.</span><span class="t">Have you ever had serious illness or surgical operation? If yes, what was it?</span><span class="y">Yes <i class="cb"></i> &nbsp;No <i class="cb"></i></span></div>
+      <div class="qrow"><span class="n">4.</span><span class="t">Have you ever been hospitalized? If so, when and why?</span><span class="y">Yes <i class="cb"></i> &nbsp;No <i class="cb"></i></span></div>
+      <div class="qrow"><span class="n">5.</span><span class="t">Are you now taking drugs / non-prescription medication? If so, please specify.</span><span class="y">Yes <i class="cb"></i> &nbsp;No <i class="cb"></i></span></div>
+      <div class="qrow"><span class="n">6.</span><span class="t">Do you use tobacco products?</span><span class="y">Yes <i class="cb"></i> &nbsp;No <i class="cb"></i></span></div>
+      <div class="qrow"><span class="n">7.</span><span class="t">Do you use alcohol, cocaine, or other dangerous drugs?</span><span class="y">Yes <i class="cb"></i> &nbsp;No <i class="cb"></i></span></div>
+
+      <div class="qrow"><span class="n">8.</span><span class="t">
+        Allergies — are you allergic to any of the following?<br>
+        <span class="cb"></span>Local anesthetic (ex. Lidocaine)
+        <span class="cb"></span>Penicillin
+        <span class="cb"></span>Antibiotics
+        <span class="cb"></span>Sulfa drugs<br>
+        <span class="cb"></span>Barbiturates
+        <span class="cb"></span>Aspirin
+        <span class="cb"></span>Latex
+        <span class="cb"></span>Other <span class="ul" style="min-width:.9in"></span>
+      </span></div>
+
+      <div class="qrow"><span class="n">9.</span><span class="t">Bleeding problems? If so, describe (bleeding time) <span class="ul" style="min-width:1.4in"></span></span><span class="y">Yes <i class="cb"></i> &nbsp;No <i class="cb"></i></span></div>
+
+      <div class="qrow"><span class="n">10.</span><span class="t">
+        <b>For women only:</b>
+        Are you pregnant? <i class="cb"></i>Yes <i class="cb"></i>No
+        &nbsp;·&nbsp; Are you nursing? <i class="cb"></i>Yes <i class="cb"></i>No
+        &nbsp;·&nbsp; Birth control pills? <i class="cb"></i>Yes <i class="cb"></i>No
+      </span></div>
+
+      <div class="qrow"><span class="n">11.</span><span class="t">Blood type <span class="ul" style="min-width:.9in"></span></span>
+        <span class="y">12. Blood pressure <span class="ul" style="min-width:.9in"></span></span></div>
+
+      <div class="qrow"><span class="n">13.</span><span class="t">Do you or have you had any of the following? <b>Check which apply.</b></span></div>
+    </div>
+
+    <div class="cbgrid" style="margin-top:2pt">
+      <span><i class="cb"></i>Diabetes</span>
+      <span><i class="cb"></i>High blood pressure</span>
+      <span><i class="cb"></i>Low blood pressure</span>
+      <span><i class="cb"></i>Hemophilia</span>
+      <span><i class="cb"></i>AIDS or HIV infection</span>
+      <span><i class="cb"></i>Sexually transmitted disease</span>
+      <span><i class="cb"></i>Cold sores / fever blisters</span>
+      <span><i class="cb"></i>Fainting / seizures</span>
+      <span><i class="cb"></i>Rapid weight loss</span>
+      <span><i class="cb"></i>Radiation therapy</span>
+      <span><i class="cb"></i>Glaucoma</span>
+      <span><i class="cb"></i>Joint replacement / implant</span>
+      <span><i class="cb"></i>Heart disease</span>
+      <span><i class="cb"></i>Heart murmur</span>
+      <span><i class="cb"></i>Heart surgery</span>
+      <span><i class="cb"></i>Heart attack</span>
+      <span><i class="cb"></i>Angina</span>
+      <span><i class="cb"></i>Hepatitis / liver disease</span>
+      <span><i class="cb"></i>Jaundice</span>
+      <span><i class="cb"></i>Hay fever / allergies</span>
+      <span><i class="cb"></i>Respiratory problems</span>
+      <span><i class="cb"></i>Tuberculosis</span>
+      <span><i class="cb"></i>Kidney problems</span>
+      <span><i class="cb"></i>Swollen ankles</span>
+      <span><i class="cb"></i>Chest pain</span>
+      <span><i class="cb"></i>Stroke</span>
+      <span><i class="cb"></i>Cancer</span>
+      <span><i class="cb"></i>Anemia / tumors</span>
+      <span><i class="cb"></i>Asthma</span>
+      <span><i class="cb"></i>Emphysema</span>
+      <span><i class="cb"></i>Bleeding problems</span>
+      <span><i class="cb"></i>Blood diseases</span>
+      <span><i class="cb"></i>Arthritis / rheumatism</span>
+      <span><i class="cb"></i>Canker sores</span>
+      <span><i class="cb"></i>Thyroid problem</span>
+      <span><i class="cb"></i>Other: ______________</span>
+    </div>
+
+    <div class="sh-foot">
+      <div class="sh-sign">
+        <div class="line"></div>
+        <div class="cap">Patient / Guardian Signature</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ------------------------------------------------------------------ */
+/* Config                                                              */
+/* ------------------------------------------------------------------ */
+const QUESTIONS = [
+  { n:1, text:'Are you in good health?' },
+  { n:2, text:'Are you under medical treatment now?',
+    detail:{ key:'q2', label:'If so, what condition is being treated?' } },
+  { n:3, text:'Have you ever had a serious illness or surgical operation?',
+    detail:{ key:'q3', label:'If yes, what was the illness or operation?' } },
+  { n:4, text:'Have you ever been hospitalized?',
+    detail:{ key:'q4', label:'If so, when and why?' } },
+  { n:5, text:'Are you now taking drugs / non-prescription medication?',
+    detail:{ key:'q5', label:'If so, please specify' } },
+  { n:6, text:'Do you use tobacco products?',
+    detail:{ key:'q6', label:'How often / how much' } },
+  { n:7, text:'Do you use alcohol, cocaine, or other dangerous drugs?',
+    detail:{ key:'q7', label:'Please specify' } },
+];
+
+const ALLERGIES = [
+  'Local anesthetic (ex. Lidocaine)','Penicillin','Antibiotics',
+  'Sulfa drugs','Barbiturates','Aspirin','Latex',
+];
+
+const WOMEN = [
+  { key:'pregnant', label:'Are you pregnant?' },
+  { key:'nursing',  label:'Are you nursing?' },
+  { key:'pills',    label:'Are you taking birth control pills?' },
+];
+/* Q10 is written out in the markup (womenBlock); the list above is kept as the
+   reference so the printed sheet and the screen never drift apart. */
+
+/* Paper form, question 13 — duplicates on the printed sheet merged. */
+const CONDITIONS = [
+  'Diabetes','High blood pressure','Low blood pressure',
+  'Hemophilia','AIDS or HIV infection','Sexually transmitted disease',
+  'Cold sores / fever blisters','Fainting / seizures','Rapid weight loss',
+  'Radiation therapy','Glaucoma','Joint replacement / implant',
+  'Heart disease','Heart murmur','Heart surgery',
+  'Heart attack','Angina','Hepatitis / liver disease',
+  'Jaundice','Hay fever / allergies','Respiratory problems',
+  'Tuberculosis','Kidney problems','Swollen ankles',
+  'Chest pain','Stroke','Cancer',
+  'Anemia / tumors','Asthma','Emphysema',
+  'Bleeding problems','Blood diseases','Arthritis / rheumatism',
+  'Canker sores','Thyroid problem','Other',
+];
+
+const state = {
+  q:{}, detail:{}, allergies:[], conditions:[],
+  yn:{ bleeding:null, pregnant:null, nursing:null, pills:null },
+};
+
+/* ------------------------------------------------------------------ */
+/* Helpers                                                             */
+/* ------------------------------------------------------------------ */
+const $ = id => document.getElementById(id);
+let toastTimer;
+function toast(msg){
+  const el = $('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+/* ------------------------------------------------------------------ */
+/* Yes / No questions                                                  */
+/* ------------------------------------------------------------------ */
+function buildQuestions(){
+  const host = $('questions');
+  host.innerHTML = '';
+
+  QUESTIONS.forEach(q => {
+    const wrap = document.createElement('div');
+    wrap.className = 'q';
+    wrap.dataset.q = q.n;
+
+    const top = document.createElement('div');
+    top.className = 'q-top';
+
+    const text = document.createElement('div');
+    text.className = 'q-text';
+    const num = document.createElement('span');
+    num.className = 'q-num';
+    num.textContent = q.n;
+    const b = document.createElement('b');
+    b.textContent = q.text;
+    text.append(num, b);
+
+    const yn = document.createElement('div');
+    yn.className = 'yn';
+    ['yes','no'].forEach(v => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.dataset.v = v;
+      btn.setAttribute('aria-pressed', 'false');
+      btn.textContent = v === 'yes' ? 'Yes' : 'No';
+      btn.addEventListener('click', () => setAnswer(q.n, v, wrap, yn));
+      yn.appendChild(btn);
+    });
+
+    top.append(text, yn);
+    wrap.appendChild(top);
+
+    if (q.detail){
+      const det = document.createElement('div');
+      det.className = 'detail';
+      const f = document.createElement('div');
+      f.className = 'field';
+      const lab = document.createElement('label');
+      lab.setAttribute('for', 'd_' + q.detail.key);
+      lab.textContent = q.detail.label;
+      const inp = document.createElement('input');
+      inp.id = 'd_' + q.detail.key;
+      inp.dataset.detail = q.detail.key;
+      inp.addEventListener('input', () => { state.detail[q.detail.key] = inp.value; });
+      f.append(lab, inp);
+      det.appendChild(f);
+      wrap.appendChild(det);
+    }
+
+    host.appendChild(wrap);
+  });
+}
+
+function setAnswer(n, value, wrap, yn){
+  state.q[n] = value;
+  [...yn.children].forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === value)));
+  wrap.classList.toggle('on', true);
+  const det = wrap.querySelector('.detail');
+  if (det) det.classList.toggle('show', value === 'yes');
+}
+
+/* ------------------------------------------------------------------ */
+/* Stand-alone yes / no groups (q9 bleeding, q10 women only)            */
+/* ------------------------------------------------------------------ */
+function wireYesNo(){
+  document.querySelectorAll('.yn[data-yn]').forEach(yn => {
+    const key = yn.dataset.yn;
+    ['yes','no'].forEach(v => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.dataset.v = v;
+      btn.setAttribute('aria-pressed', 'false');
+      btn.textContent = v === 'yes' ? 'Yes' : 'No';
+      btn.addEventListener('click', () => {
+        state.yn[key] = v;
+        [...yn.children].forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+        yn.closest('.q').classList.add('on');
+        if (key === 'bleeding') $('bleedDetail').classList.toggle('show', v === 'yes');
+      });
+      yn.appendChild(btn);
+    });
+  });
+}
+
+function syncWomen(){
+  const female = $('sex').value === 'F';
+  $('womenBlock').hidden = !female;
+  if (female) return;
+  ['pregnant','nursing','pills'].forEach(k => {
+    state.yn[k] = null;
+    const yn = document.querySelector('.yn[data-yn="' + k + '"]');
+    if (!yn) return;
+    [...yn.children].forEach(b => b.setAttribute('aria-pressed', 'false'));
+    yn.closest('.q').classList.remove('on');
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Checkbox groups                                                     */
+/* ------------------------------------------------------------------ */
+function buildChips(hostId, items, bucket){
+  const host = $(hostId);
+  host.innerHTML = '';
+  items.forEach(label => {
+    const chip = document.createElement('label');
+    chip.className = 'chip';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.addEventListener('change', () => {
+      chip.classList.toggle('sel', cb.checked);
+      const set = state[bucket];
+      const i = set.indexOf(label);
+      if (cb.checked && i === -1) set.push(label);
+      if (!cb.checked && i > -1) set.splice(i, 1);
+    });
+    chip.append(cb, document.createTextNode(label));
+    host.appendChild(chip);
+  });
+}
+
+function buildConditions(){
+  const host = $('condGrid');
+  host.innerHTML = '';
+  CONDITIONS.forEach(label => {
+    const card = document.createElement('label');
+    card.className = 'cond';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.addEventListener('change', () => {
+      card.classList.toggle('sel', cb.checked);
+      const i = state.conditions.indexOf(label);
+      if (cb.checked && i === -1) state.conditions.push(label);
+      if (!cb.checked && i > -1) state.conditions.splice(i, 1);
+      if (label === 'Other') $('condOtherWrap').hidden = !cb.checked;
+      updateCondCount();
+    });
+    card.append(cb, document.createTextNode(label));
+    host.appendChild(card);
+  });
+  updateCondCount();
+}
+
+function updateCondCount(){
+  const n = state.conditions.length;
+  $('condCount').textContent = n ? n + ' selected' : '';
+}
+
+/* ------------------------------------------------------------------ */
+/* Signature                                                           */
+/* ------------------------------------------------------------------ */
+const canvas = $('sig');
+const ctx = canvas.getContext('2d');
+let drawing = false, hasInk = false;
+
+function sizeCanvas(){
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const data = hasInk ? canvas.toDataURL() : null;
+
+  canvas.width = Math.max(1, Math.round(rect.width * dpr));
+  canvas.height = Math.max(1, Math.round(rect.height * dpr));
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#0b1b26';
+
+  if (data){
+    const img = new Image();
+    img.onload = () => ctx.drawImage(img, 0, 0, rect.width, rect.height);
+    img.src = data;
+  }
+}
+
+function pos(e){
+  const r = canvas.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+
+canvas.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  canvas.setPointerCapture(e.pointerId);
+  drawing = true;
+  hasInk = true;
+  const p = pos(e);
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+  $('sigErr').classList.remove('show');
+});
+canvas.addEventListener('pointermove', e => {
+  if (!drawing) return;
+  const p = pos(e);
+  ctx.lineTo(p.x, p.y);
+  ctx.stroke();
+});
+['pointerup','pointercancel','pointerleave'].forEach(ev =>
+  canvas.addEventListener(ev, () => { drawing = false; }));
+
+function clearSignature(){
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  hasInk = false;
+}
+
+/* ------------------------------------------------------------------ */
+/* Collected record                                                    */
+/* ------------------------------------------------------------------ */
+function collect(){
+  return {
+    patient: {
+      last_name: $('lastName').value.trim(),
+      first_name: $('firstName').value.trim(),
+      middle_name: $('middleName').value.trim(),
+      birthdate: $('birthdate').value || null,
+      age: $('age').value ? Number($('age').value) : null,
+      sex: $('sex').value || null,
+      civil_status: $('civilStatus').value || null,
+      religion: $('religion').value.trim() || null,
+      nationality: $('nationality').value.trim() || null,
+      birthplace: $('birthplace').value.trim() || null,
+      nickname: $('nickname').value.trim() || null,
+      address: $('address').value.trim() || null,
+      home_no: $('homeNo').value.trim() || null,
+      mobile_no: $('mobile').value.trim() || null,
+      email: $('email').value.trim() || null,
+      occupation: $('occupation').value.trim() || null,
+      office_no: $('officeNo').value.trim() || null,
+      fax_no: $('faxNo').value.trim() || null,
+      dental_insurance: $('insurance').value.trim() || null,
+      effective_date: $('effectiveDate').value || null,
+      guardian_name: $('guardianName').value.trim() || null,
+      guardian_occupation: $('guardianOccupation').value.trim() || null,
+      guardian_email: $('guardianEmail').value.trim() || null,
+      referred_by: $('referrer').value.trim() || null,
+      consultation_reason: $('reason').value.trim() || null,
+    },
+    dental_history: {
+      previous_dentist: $('prevDentist').value.trim() || null,
+      previous_dentist_office: $('prevDentistOffice').value.trim() || null,
+      last_visit: $('lastVisit').value || null,
+    },
+    medical_history: {
+      physician_name: $('physName').value.trim() || null,
+      physician_specialty: $('physSpec').value.trim() || null,
+      physician_office: $('physAddr').value.trim() || null,
+      physician_phone: $('physNo').value.trim() || null,
+      screening: Object.fromEntries(
+        QUESTIONS.map(q => ['q' + q.n, {
+          answer: state.q[q.n] || null,
+          detail: state.detail['q' + q.n] || null,
+        }])
+      ),
+      allergies: state.allergies,
+      allergy_other: $('allergyOther').value.trim() || null,
+      bleeding_problems: state.yn.bleeding,
+      bleeding_time: $('bleedingTime').value.trim() || null,
+      women_only: {
+        pregnant: state.yn.pregnant,
+        nursing: state.yn.nursing,
+        birth_control_pills: state.yn.pills,
+      },
+      blood_type: $('bloodType').value || null,
+      blood_pressure: $('bloodPressure').value.trim() || null,
+      conditions: state.conditions,
+      condition_other: $('condOther').value.trim() || null,
+      notes: $('medicalNotes').value.trim() || null,
+    },
+    signature: { captured: hasInk, data_url: hasInk ? canvas.toDataURL('image/png') : null },
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Validation & submit                                                 */
+/* ------------------------------------------------------------------ */
+function markError(fieldId, on){
+  $(fieldId).classList.toggle('err', on);
+}
+
+function validate(){
+  const errs = [];
+
+  const last = $('lastName').value.trim();
+  const first = $('firstName').value.trim();
+  markError('fLast', !last);
+  markError('fFirst', !first);
+  if (!last) errs.push('Last name');
+  if (!first) errs.push('First name');
+
+  const mobile = $('mobile').value.trim();
+  markError('fMobile', !mobile);
+  if (!mobile) errs.push('Contact number');
+
+  $('sigErr').classList.toggle('show', !hasInk);
+  if (!hasInk) errs.push('Signature');
+
+  if (errs.length){
+    toast('Missing: ' + errs.join(', '));
+    const firstBad = $('fLast').classList.contains('err') ? $('lastName')
+      : $('fFirst').classList.contains('err') ? $('firstName')
+      : $('fMobile').classList.contains('err') ? $('mobile')
+      : canvas;
+    firstBad.scrollIntoView({ behavior:'smooth', block:'center' });
+    return false;
+  }
+  return true;
+}
+
+$('btnSubmit').addEventListener('click', () => {
+  if (!validate()) return;
+  $('json').textContent = JSON.stringify(collect(), null, 2);
+  $('jsonCard').hidden = false;
+  toast('Intake record complete — demo only, nothing was saved.');
+  $('jsonCard').scrollIntoView({ behavior:'smooth', block:'start' });
+});
+
+$('btnPreview').addEventListener('click', () => {
+  $('json').textContent = JSON.stringify(collect(), null, 2);
+  $('jsonCard').hidden = false;
+  $('jsonCard').scrollIntoView({ behavior:'smooth', block:'start' });
+});
+
+$('clearSig').addEventListener('click', clearSignature);
+$('btnPrint').addEventListener('click', () => window.print());
+
+/* mode switch */
+const PAD_PX = 12 / 25.4 * 96;
+function checkSheetFit(){
+  const sheet = $('sheet'), badge = $('fitBadge');
+  if (document.body.dataset.mode !== 'print'){ badge.hidden = true; return; }
+  badge.hidden = false;
+  const usable = 11 * 96 - PAD_PX * 2;
+  const contentH = sheet.scrollHeight - PAD_PX * 2;
+  const over = Math.round(contentH - usable);
+  if (over > 2){
+    badge.className = 'fit-badge bad';
+    badge.textContent = 'Overflow +' + over + 'px — content spills to a 2nd page';
+  } else {
+    badge.className = 'fit-badge';
+    badge.textContent = 'Fits one Letter page';
+  }
+}
+
+$('modeSeg').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-mode]');
+  if (!btn) return;
+  document.body.dataset.mode = btn.dataset.mode;
+  [...document.querySelectorAll('#modeSeg button')].forEach(b => b.classList.toggle('on', b === btn));
+  window.scrollTo({ top:0, behavior:'smooth' });
+  checkSheetFit();
+});
+
+/* age from birthdate */
+$('birthdate').addEventListener('change', e => {
+  const v = e.target.value;
+  if (!v) return;
+  const bd = new Date(v + 'T00:00:00');
+  const now = new Date();
+  let age = now.getFullYear() - bd.getFullYear();
+  const m = now.getMonth() - bd.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < bd.getDate())) age--;
+  if (age >= 0 && age < 130) $('age').value = age;
+});
+
+/* ------------------------------------------------------------------ */
+/* Boot                                                                */
+/* ------------------------------------------------------------------ */
+buildQuestions();
+wireYesNo();
+buildChips('allergyChips', ALLERGIES, 'allergies');
+buildConditions();
+syncWomen();
+
+$('sex').addEventListener('change', syncWomen);
+
+/* ?mode=print opens straight into the print sheet */
+if (/[?&]mode=print/.test(location.search)){
+  document.body.dataset.mode = 'print';
+  [...document.querySelectorAll('#modeSeg button')].forEach(b => b.classList.toggle('on', b.dataset.mode === 'print'));
+}
+checkSheetFit();
+
+sizeCanvas();
+window.addEventListener('resize', () => { sizeCanvas(); checkSheetFit(); });
+window.addEventListener('beforeprint', () => { /* sheet is static */ });
+</script>
+</body>
+</html>

@@ -23,6 +23,7 @@ import {
 import type { ConsentRecord } from "@/lib/types";
 import { Callout, Detail, EmptyState, PageHeader } from "@/components/ui";
 import ToothChart from "@/components/tooth-chart";
+import Odontogram from "@/components/odontogram";
 import TreatmentForm from "@/components/treatment-form";
 import ConsentForm from "@/components/consent-form";
 import PatientForm from "@/components/patient-form";
@@ -86,7 +87,9 @@ export default async function PatientRecordPage({
 
   const tabs = [
     { key: "overview", label: "Overview" },
+    { key: "chart", label: "Dental Record Chart" },
     { key: "treatments", label: `Treatments (${treatments.length})` },
+    { key: "intake", label: "Intake & Medical History" },
     { key: "consent", label: `Consent (${consents.length})` },
     { key: "appointments", label: `Appointments (${appointments.length})` },
     { key: "edit", label: "Edit details" },
@@ -198,7 +201,7 @@ export default async function PatientRecordPage({
             </section>
 
             <section className="panel p-5">
-              <h2 className="panel-title mb-4">Dental chart</h2>
+              <h2 className="panel-title mb-4">Dental chart (quick view)</h2>
               <ToothChart counts={counts} />
             </section>
           </div>
@@ -253,6 +256,21 @@ export default async function PatientRecordPage({
             </section>
           </div>
         </div>
+      )}
+
+      {activeTab === "chart" && <Odontogram />}
+
+      {activeTab === "intake" && (
+        <section className="panel">
+          <div className="panel-header">
+            <h2 className="panel-title">Intake & Medical History</h2>
+          </div>
+          <div className="panel-body">
+            <p className="text-sm text-muted">
+              Patient intake form will be available here. Secretary can fill this out with the patient&apos;s information and medical history.
+            </p>
+          </div>
+        </section>
       )}
 
       {activeTab === "treatments" && (

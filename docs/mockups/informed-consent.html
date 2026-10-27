@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GDCMAS — Informed Consent (DEMO)</title>
+<style>
+  :root{
+    --bg:#f8fafc; --panel:#fff; --line:#d6dee7; --line-soft:#e8eef4;
+    --ink:#111c27; --soft:#58687a;
+    --brand:#006666; --brand-2:#008a8a; --brand-soft:#e3f3f3;
+    --ok:#15803d; --ok-soft:#f0fdf4;
+    --danger:#b91c1c; --danger-soft:#fef2f2;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+
+  /* ---------- demo bar ---------- */
+  .demo-bar{
+    background:#fef3c7;border-bottom:1px solid #fcd34d;color:#78350f;
+    padding:8px 18px;font-size:12px;font-weight:600;
+    display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;justify-content:space-between;
+  }
+  .demo-bar a{color:#78350f;font-weight:800}
+
+  /* ---------- mode switch ---------- */
+  .modes{
+    position:sticky;top:0;z-index:30;background:#fff;border-bottom:1px solid var(--line);
+    padding:9px 18px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+  }
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#f8fafc}
+  .seg button{
+    border:0;background:transparent;padding:7px 14px;font:inherit;font-size:12.5px;font-weight:600;
+    color:var(--soft);cursor:pointer;
+  }
+  .seg button + button{border-left:1px solid var(--line)}
+  .seg button.on{background:var(--brand);color:#fff}
+  .modes .spacer{flex:1}
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 14px;border-radius:8px;
+    border:1px solid var(--line);background:#fff;font:inherit;font-size:12.5px;font-weight:600;
+    color:var(--ink);cursor:pointer;min-height:38px;
+  }
+  .btn:hover{background:#f1f5f9}
+  .btn-primary{background:var(--brand);border-color:var(--brand);color:#fff}
+  .btn-primary:hover{background:#005454}
+  .btn-primary:disabled{background:#cbd5e1;border-color:#cbd5e1;color:#fff;cursor:not-allowed}
+  .btn-ghost{border-color:transparent;color:var(--soft)}
+  .btn-sm{min-height:32px;padding:6px 11px;font-size:12px}
+  .fit-badge{
+    font-size:11.5px;font-weight:800;border-radius:999px;padding:6px 12px;
+    border:1px solid #86efac;background:var(--ok-soft);color:var(--ok);
+  }
+  .fit-badge.bad{border-color:#fca5a5;background:var(--danger-soft);color:var(--danger)}
+
+  /* ---------- tablet app ---------- */
+  main{padding:18px;max-width:1180px;margin-inline:auto;display:grid;gap:16px}
+
+  .app-head{
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:14px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:14px;
+  }
+  .logo{
+    width:46px;height:46px;border-radius:50%;background:var(--brand);color:#fff;
+    display:grid;place-items:center;font-weight:800;font-size:13px;letter-spacing:.04em;flex:0 0 auto;
+  }
+  .app-title{font-size:16px;font-weight:800;letter-spacing:.01em}
+  .app-sub{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--soft);font-weight:600}
+  .step{
+    margin-left:auto;font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+    border:1.5px solid var(--brand);color:var(--brand);border-radius:999px;padding:6px 14px;white-space:nowrap;
+  }
+  .progress{
+    flex:1 1 100%;display:flex;gap:6px;align-items:center;
+  }
+  .progress .track{flex:1;height:7px;border-radius:999px;background:#e6eef4;overflow:hidden}
+  .progress .fill{height:100%;width:75%;background:linear-gradient(90deg,var(--brand),var(--brand-2))}
+  .progress .lbl{font-size:11px;font-weight:700;color:var(--soft);white-space:nowrap}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .card-head{
+    padding:12px 16px;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;
+    gap:10px;flex-wrap:wrap;background:#fbfdfe;
+  }
+  .card-head h2{
+    margin:0;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:var(--brand);
+  }
+  .card-head .num{
+    width:22px;height:22px;border-radius:6px;background:var(--brand-soft);color:var(--brand);
+    display:grid;place-items:center;font-size:11px;font-weight:800;flex:0 0 auto;
+  }
+  .card-head .right{margin-left:auto;font-size:11.5px;font-weight:700;color:var(--soft)}
+
+  /* ---------- clause rows ---------- */
+  .clause{
+    display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:14px;align-items:start;
+    padding:13px 16px;border-bottom:1px solid var(--line-soft);
+  }
+  .clause:last-child{border-bottom:0}
+  .clause.done{background:#fbfefc}
+  .clause h3{
+    margin:0 0 4px;font-size:11.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--brand);
+    display:flex;gap:8px;align-items:baseline;
+  }
+  .clause h3 .n{
+    display:inline-grid;place-items:center;min-width:18px;height:18px;border-radius:5px;
+    background:#eef4f8;color:var(--soft);font-size:10.5px;font-weight:800;flex:0 0 auto;
+  }
+  .clause.done h3 .n{background:var(--ok-soft);color:var(--ok)}
+  .clause p{margin:0;font-size:13.5px;line-height:1.5;text-align:justify;color:#22303d}
+
+  .init-btn{
+    width:92px;height:70px;border:1.5px dashed #b6c4d2;border-radius:10px;background:#fff;
+    display:grid;place-items:center;cursor:pointer;position:relative;padding:4px;
+    font:inherit;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#94a3b8;
+  }
+  .init-btn:hover{border-color:#7fbdbd;background:#f7fdfd;color:var(--brand)}
+  .init-btn.done{border-style:solid;border-color:var(--ok);background:var(--ok-soft);color:var(--ok)}
+  .init-btn img{max-width:78px;max-height:46px;display:block}
+  .init-btn .check{
+    position:absolute;top:-9px;right:-9px;width:22px;height:22px;border-radius:50%;
+    background:var(--ok);color:#fff;font-size:13px;display:grid;place-items:center;font-weight:800;
+    box-shadow:0 1px 4px rgba(15,23,42,.28);
+  }
+
+  /* ---------- legal ---------- */
+  .legal{padding:16px;display:grid;gap:12px;justify-items:center;text-align:center}
+  .legal .quote{
+    margin:0;font-size:14px;font-weight:800;line-height:1.5;text-decoration:underline;text-underline-offset:3px;
+    max-width:60ch;color:#0f2b2b;
+  }
+  .legal .body{
+    margin:0;font-size:13px;line-height:1.6;text-align:justify;color:#22303d;max-width:92ch;
+    border:1px solid #cfe6e6;background:#f6fbfb;border-radius:10px;padding:14px 16px;
+  }
+
+  /* ---------- signature pads ---------- */
+  .pads{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px}
+  @media (max-width:820px){.pads{grid-template-columns:1fr}}
+  .pad{border:1px solid var(--line);border-radius:11px;padding:12px;background:#fcfdfe;display:grid;gap:9px}
+  .pad-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .pad-head .t{font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--soft)}
+  .pad-head .dot{
+    width:9px;height:9px;border-radius:50%;background:#cbd5e1;flex:0 0 auto;
+  }
+  .pad-head .dot.on{background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
+  .pad-wrap{border:1px dashed #9fd6d6;border-radius:9px;background:#fff;padding:4px;position:relative}
+  .pad-wrap canvas{display:block;width:100%;height:150px;border-radius:6px;background:#fff;touch-action:none;cursor:crosshair}
+  .pad-wrap .ghost{
+    position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;
+    font-size:12px;font-weight:700;color:#b6c4d2;
+  }
+  .pad-wrap.inked .ghost{display:none}
+  .pad-foot{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .pad-foot .who{font-size:11px;color:var(--soft);margin:0}
+
+  /* ---------- status / actions ---------- */
+  .status{
+    padding:12px 16px;border-top:1px solid var(--line-soft);background:#fbfdfe;
+    display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12.5px;font-weight:700;color:var(--soft);
+  }
+  .status .pill{
+    border-radius:999px;padding:5px 12px;font-size:11.5px;font-weight:800;border:1px solid var(--line);background:#fff;
+  }
+  .status .pill.ok{border-color:#86efac;background:var(--ok-soft);color:var(--ok)}
+  .status .pill.warn{border-color:#fcd34d;background:#fffbeb;color:#92400e}
+  .actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:14px 16px;border-top:1px solid var(--line-soft);background:#fbfdfe}
+
+  /* ---------- modal ---------- */
+  .modal{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;place-items:center;z-index:80;padding:16px}
+  .modal.open{display:grid}
+  .modal-card{
+    background:#fff;border-radius:14px;width:min(580px,100%);max-height:92vh;overflow:auto;
+    box-shadow:0 20px 60px rgba(15,23,42,.35);
+  }
+  .modal-head{padding:14px 16px;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;gap:10px}
+  .modal-head h3{margin:0;font-size:13px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--brand)}
+  .modal-head .x{margin-left:auto;border:0;background:transparent;font-size:20px;line-height:1;cursor:pointer;color:var(--soft);padding:4px 8px;border-radius:6px}
+  .modal-head .x:hover{background:#f1f5f9}
+  .modal-body{padding:16px;display:grid;gap:12px}
+  .modal-body .sub{margin:0;font-size:12.5px;color:var(--soft)}
+  .modal-foot{display:flex;gap:10px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--line-soft);flex-wrap:wrap}
+  .tabs{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#f8fafc;width:max-content}
+  .tabs button{border:0;background:transparent;padding:6px 14px;font:inherit;font-size:12px;font-weight:700;color:var(--soft);cursor:pointer}
+  .tabs button + button{border-left:1px solid var(--line)}
+  .tabs button.on{background:var(--brand);color:#fff}
+  .field{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .field label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--soft)}
+  .field input{
+    width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;
+    font:inherit;font-size:16px;letter-spacing:.12em;text-transform:uppercase;background:#fff;color:var(--ink);min-height:42px;
+  }
+  .field input:focus{outline:2px solid #9fd6d6;border-color:var(--brand)}
+  .typed-preview{
+    border:1px dashed var(--line);border-radius:9px;background:#fcfdfe;height:96px;
+    display:grid;place-items:center;overflow:hidden;
+  }
+  .typed-preview img{max-height:76px;max-width:100%}
+
+  /* ---------- meta + json ---------- */
+  .meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;padding:16px}
+  @media (max-width:700px){.meta{grid-template-columns:1fr}}
+  .meta .kv{display:grid;gap:2px;min-width:0}
+  .meta .k{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--soft)}
+  .meta .v{font-size:12.5px;font-weight:600;word-break:break-word}
+  pre{
+    margin:0;padding:14px;background:#0f172a;color:#a5f3fc;border-radius:10px;
+    font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto;max-height:340px;
+  }
+  .json-wrap{padding:16px}
+
+  /* ---------- toast ---------- */
+  #toast{
+    position:fixed;left:50%;bottom:22px;transform:translate(-50%,20px);
+    background:#0f172a;color:#e2e8f0;font-size:12.5px;font-weight:600;
+    padding:10px 18px;border-radius:9px;opacity:0;pointer-events:none;
+    transition:opacity .15s ease,transform .15s ease;z-index:90;max-width:90vw;text-align:center;
+  }
+  #toast.show{opacity:1;transform:translate(-50%,0)}
+
+  /* =================================================================
+     PRINT SHEET — Letter portrait, 12mm, 8.5pt, one page
+     ================================================================= */
+  .sheet-stage{padding:22px 18px 60px}
+  .sheet{
+    display:none;background:#fff;width:min(8.5in,100%);min-height:11in;
+    padding:12mm;margin:0 auto;box-shadow:0 2px 16px rgba(15,23,42,.15);
+    color:#000;font-family:Arial,Helvetica,"Liberation Sans",sans-serif;
+    font-size:8.5pt;line-height:1.32;
+  }
+  body[data-mode="print"] main{display:none}
+  body[data-mode="print"] .sheet{display:block}
+
+  .sh-badge{
+    width:max-content;margin:0 auto 6pt;border:1.2px solid #000;border-radius:999px;
+    padding:2.6pt 26pt;font:700 9.5pt/1.2 Arial,sans-serif;letter-spacing:.22em;text-transform:uppercase;
+  }
+  .sh-top{display:grid;grid-template-columns:1fr 1fr;gap:4pt 14pt;margin-bottom:7pt}
+  .pf{display:flex;align-items:flex-end;gap:4pt;min-width:0}
+  .pf .l{font-size:8pt;white-space:nowrap}
+  .pf .ln{flex:1;border-bottom:1px solid #000;min-height:9pt;min-width:14pt}
+
+  .sheet .clause{position:relative;padding-right:1.15in;margin-bottom:3.8pt;text-align:justify}
+  .sheet .clause .t{font-weight:700;text-transform:uppercase;letter-spacing:.02em}
+  .sheet .clause .t::after{content:" "}
+  .sheet .clause .initial{
+    position:absolute;right:0;bottom:0;white-space:nowrap;font-size:8pt;font-weight:700;
+  }
+  .sheet .clause .initial .ul{display:inline-block;width:.82in;border-bottom:1px solid #000}
+
+  .legal-line{
+    margin:8pt 0 5pt;text-align:center;font-weight:700;text-decoration:underline;text-underline-offset:2pt;
+  }
+  .legal-body{margin:0;text-align:justify}
+
+  .sh-foot{margin-top:11pt;display:grid;grid-template-columns:repeat(3,1fr);gap:16pt}
+  .sh-sign{text-align:center}
+  .sh-sign .line{border-bottom:1px solid #000;height:20pt}
+  .sh-sign .cap{font-size:7.5pt;margin-top:2pt;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+
+  @page{size:letter portrait;margin:12mm}
+  @media print{
+    body{background:#fff}
+    .demo-bar,.modes,#toast,.modal{display:none !important}
+    main{display:none !important}
+    .sheet-stage{padding:0}
+    .sheet{
+      display:block !important;box-shadow:none;width:auto;min-height:0;padding:0;margin:0;
+    }
+  }
+</style>
+</head>
+<body data-mode="screen">
+
+<div class="demo-bar">
+  <span>DEMO ONLY — static mockup, not connected to the database. Nothing here is saved.</span>
+  <span>Chart <a href="index.html">1</a> · Ledger <a href="treatment-record.html">2</a> · Print <a href="treatment-record-paper.html">3</a> · Intake <a href="intake-form.html">4</a></span>
+</div>
+
+<div class="modes">
+  <div class="seg" id="modeSeg" role="group" aria-label="View">
+    <button type="button" data-mode="screen" class="on">Tablet consent</button>
+    <button type="button" data-mode="print">Print sheet</button>
+  </div>
+  <span class="spacer"></span>
+  <span class="fit-badge" id="fitBadge" hidden></span>
+  <button type="button" class="btn" id="btnPrint">Print / Save PDF</button>
+</div>
+
+<main>
+
+  <div class="app-head">
+    <div class="logo">GDC</div>
+    <div>
+      <div class="app-title">Informed Consent &amp; Terms</div>
+      <div class="app-sub">Gonzaga Dental Clinic</div>
+    </div>
+    <span class="step">Step 3 of 4</span>
+    <div class="progress">
+      <span class="lbl">Patient</span>
+      <div class="track"><div class="fill"></div></div>
+      <span class="lbl">Consent</span>
+    </div>
+  </div>
+
+  <!-- ============ CLAUSES ============ -->
+  <section class="card">
+    <div class="card-head">
+      <span class="num">1</span>
+      <h2>Consent clauses</h2>
+      <span class="right" id="clauseCount">0 of 10 initialed</span>
+    </div>
+    <div id="clauses"></div>
+  </section>
+
+  <!-- ============ LEGAL ============ -->
+  <section class="card">
+    <div class="card-head"><span class="num">2</span><h2>Legal disclaimer &amp; authorization</h2></div>
+    <div class="legal">
+      <p class="quote">I understand that dentistry is not an exact science and that no dentist can properly guarantee accurate results all the time.</p>
+      <p class="body">I authorize the attending dentist and staff of Gonzaga Dental Clinic to perform the treatment described above and any procedure necessary in their professional judgement. I accept full responsibility for payment of all fees for services rendered, regardless of any insurance coverage. I confirm that I have read and understood this form, that my questions have been answered, and that I give my consent voluntarily, under my own free will, and may withdraw it at any time.</p>
+    </div>
+  </section>
+
+  <!-- ============ SIGNATURES ============ -->
+  <section class="card">
+    <div class="card-head"><span class="num">3</span><h2>E-signatures</h2><span class="right">Both required</span></div>
+    <div class="pads">
+      <div class="pad">
+        <div class="pad-head"><span class="dot" id="dotPatient"></span><span class="t">Patient / parent / guardian</span></div>
+        <div class="pad-wrap" id="wrapPatient">
+          <canvas id="padPatient"></canvas>
+          <div class="ghost">Sign here</div>
+        </div>
+        <div class="pad-foot">
+          <button type="button" class="btn btn-sm" data-clear="patient">Clear signature</button>
+          <button type="button" class="btn btn-sm" data-adopt="patient">Adopt saved signature</button>
+          <p class="who" id="whoPatient">Not signed</p>
+        </div>
+      </div>
+      <div class="pad">
+        <div class="pad-head"><span class="dot" id="dotDentist"></span><span class="t">Attending dentist</span></div>
+        <div class="pad-wrap" id="wrapDentist">
+          <canvas id="padDentist"></canvas>
+          <div class="ghost">Sign here</div>
+        </div>
+        <div class="pad-foot">
+          <button type="button" class="btn btn-sm" data-clear="dentist">Clear signature</button>
+          <button type="button" class="btn btn-sm" data-adopt="dentist">Adopt saved signature</button>
+          <p class="who" id="whoDentist">Not signed</p>
+        </div>
+      </div>
+    </div>
+    <div class="status">
+      <span class="pill warn" id="statusPill">Incomplete</span>
+      <span id="statusText">Still needed: 10 of 10 clauses initialed · patient signature · dentist signature</span>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn" id="btnReset">Start over</button>
+      <button type="button" class="btn" id="btnPreview">Preview consent record</button>
+      <button type="button" class="btn btn-primary" id="btnConfirm" disabled>Confirm &amp; accept consent</button>
+    </div>
+  </section>
+
+  <!-- ============ RESULT ============ -->
+  <section class="card" id="resultCard" hidden>
+    <div class="card-head"><span class="num">✓</span><h2>Consent record</h2><span class="right" id="resultRight"></span></div>
+    <div class="meta" id="metaGrid"></div>
+    <div class="json-wrap"><pre id="json">—</pre></div>
+  </section>
+
+</main>
+
+<!-- =================================================================
+     INITIAL MODAL
+     ================================================================= -->
+<div class="modal" id="modal">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-head">
+      <h3 id="modalTitle">Digital initial</h3>
+      <button type="button" class="x" id="modalClose" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="sub" id="modalSub">Clause 1 — draw or type your initials.</p>
+      <div class="tabs" id="initTabs">
+        <button type="button" data-tab="draw" class="on">Draw initials</button>
+        <button type="button" data-tab="type">Type initials</button>
+      </div>
+
+      <div id="tabDraw">
+        <div class="pad-wrap">
+          <canvas id="padInitial"></canvas>
+          <div class="ghost">Scratch your initials here</div>
+        </div>
+        <div class="pad-foot" style="margin-top:9px">
+          <button type="button" class="btn btn-sm" id="initClear">Clear</button>
+          <p class="who">Finger, stylus, or mouse.</p>
+        </div>
+      </div>
+
+      <div id="tabType" hidden>
+        <div class="field">
+          <label for="initText">Initials</label>
+          <input id="initText" maxlength="7" placeholder="e.g. JMP" autocomplete="off">
+        </div>
+        <div class="typed-preview" style="margin-top:10px"><img id="initPreview" alt="" hidden></div>
+        <div class="pad-foot" style="margin-top:9px">
+          <p class="who">Typed initials are converted to a handwritten mark.</p>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" id="initRemove" hidden>Remove initial</button>
+      <button type="button" class="btn" id="modalCancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="initSave">Save initial</button>
+    </div>
+  </div>
+</div>
+
+<!-- =================================================================
+     PRINT SHEET
+     ================================================================= -->
+<div class="sheet-stage">
+  <div class="sheet" id="sheet">
+
+    <div class="sh-badge">Informed Consent</div>
+
+    <div class="sh-top">
+      <div class="pf"><span class="l">Patient:</span><span class="ln"></span></div>
+      <div class="pf"><span class="l">Date:</span><span class="ln"></span></div>
+    </div>
+
+    <div class="clause">
+      <span class="t">1. Treatment to be done.</span>I authorize the attending dentist and staff to perform the dental procedures explained to me — examination, cleaning, fillings, crowns, bridges, extractions, root canal treatment, dentures, and the administration of local anesthesia. The nature, alternatives, and risks of these procedures have been explained to me and my questions have been answered.
+      <span class="initial">Initial: <span class="ul"></span></span>
+    </div>
+
+    <div class="clause">
+      <span class="t">2. Drugs &amp; medications.</span>Antibiotics, analgesics, and local anesthetics given in the course of treatment may cause redness, swelling, pain, itching, vomiting, or, rarely, anaphylactic shock. I have disclosed all allergies and all medication I am currently taking.
+      <span class="initial">Initial: <span class="ul"></span></span>
+    </div>
+
+    <div class="clause">
+      <span class="t">3. Changes in treatment plan.</span>I authorize the dentist to make modifications found necessary during active care, such as performing a root canal on a tooth originally intended for a filling, and I accept the corresponding additional fee.
+      <span class="initial">Initial: <span class="ul"></span></span>
+    </div>
+
+    <div class="clause">
+      <span class="t">4. Radiograph.</span>I consent to diagnostic X-rays. I understand that radiographs are not infallible and may not reveal every condition present, and that treatment may be adjusted once the tooth is examined directly.
+      <span class="initial">Initial: <span class="ul"></span></span>
+    </div>
+
+    <div class="clause">
+      <span class="t">5. Removal of teeth.</span>Extraction may involve pain, swelling, bleeding, infection, dry socket, fractured jaw, or numbness. I confirm that the alternatives to extraction and the consequences of not removing the tooth have been discussed with me.
+      <span class="initial">Initial: <span class="ul"></span></span>
+    </div>
+
+    <div class="clause">
+      <span class="t">6. Crowns (caps) &amp; bridges.</span>Crowns and bridges may cause temporary sensitivity, and the final shade may differ slightly from natural teeth. I will care for the temporary restoration and return for permanent cementation within the time advised, failing which it may break or fail.
+      <span class="initial">Initial: <span class="ul"></span></span>
+    </div>
+
+    <div class="clause">
+      <span class="t">7. Endodontics (root canal).</span>Root canal treatment may involve instrument breakage, perforation, or flare-up, and its success cannot be guaranteed. A tooth that cannot be saved may still require extraction.
+      <span class="initial">Initial: <span class="ul"></span></span>
+    </div>
+
+    <div class="clause">
+      <span class="t">8. Periodontal disease.</span>Inflammation of the gums and supporting bone may persist or recur despite treatment and may lead to tooth loss. Periodontal treatment options, including the option of no treatment, have been explained to me.
+      <span class="initial">Initial: <span class="ul"></span></span>
+    </div>
+
+    <div class="clause">
+      <span class="t">9. Fillings.</span>A restored tooth may be sensitive to heat, cold, or pressure, which usually settles with time. I will avoid chewing hard food on it for 24 hours and understand that a fractured filling may later require root canal treatment or a crown.
+      <span class="initial">Initial: <span class="ul"></span></span>
+    </div>
+
+    <div class="clause">
+      <span class="t">10. Dentures.</span>New dentures require an adjustment period and may cause sore spots that need correction. Relines, remakes, or rescheduled delivery caused by missed appointments may involve additional fees.
+      <span class="initial">Initial: <span class="ul"></span></span>
+    </div>
+
+    <p class="legal-line">I understand that dentistry is not an exact science and that no dentist can properly guarantee accurate results all the time.</p>
+
+    <p class="legal-body">I authorize the attending dentist and staff of Gonzaga Dental Clinic to perform the treatment described above and any procedure necessary in their professional judgement. I accept full responsibility for payment of all fees for services rendered, regardless of any insurance coverage. I confirm that I have read and understood this form, that my questions have been answered, and that I give my consent voluntarily, under my own free will, and may withdraw it at any time.</p>
+
+    <div class="sh-foot">
+      <div class="sh-sign"><div class="line"></div><div class="cap">Patient / Parent / Guardian Signature</div></div>
+      <div class="sh-sign"><div class="line"></div><div class="cap">Dentist / Signature</div></div>
+      <div class="sh-sign"><div class="line"></div><div class="cap">Date</div></div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ------------------------------------------------------------------ */
+/* Clause content                                                      */
+/* ------------------------------------------------------------------ */
+const CLAUSES = [
+  { n:1, title:'Treatment to be done',
+    text:'I authorize the attending dentist and staff to perform the dental procedures explained to me — examination, cleaning, fillings, crowns, bridges, extractions, root canal treatment, dentures, and the administration of local anesthesia. The nature, alternatives, and risks of these procedures have been explained to me and my questions have been answered.' },
+  { n:2, title:'Drugs & medications',
+    text:'Antibiotics, analgesics, and local anesthetics given in the course of treatment may cause redness, swelling, pain, itching, vomiting, or, rarely, anaphylactic shock. I have disclosed all allergies and all medication I am currently taking.' },
+  { n:3, title:'Changes in treatment plan',
+    text:'I authorize the dentist to make modifications found necessary during active care, such as performing a root canal on a tooth originally intended for a filling, and I accept the corresponding additional fee.' },
+  { n:4, title:'Radiograph',
+    text:'I consent to diagnostic X-rays. I understand that radiographs are not infallible and may not reveal every condition present, and that treatment may be adjusted once the tooth is examined directly.' },
+  { n:5, title:'Removal of teeth',
+    text:'Extraction may involve pain, swelling, bleeding, infection, dry socket, fractured jaw, or numbness. I confirm that the alternatives to extraction and the consequences of not removing the tooth have been discussed with me.' },
+  { n:6, title:'Crowns (caps) & bridges',
+    text:'Crowns and bridges may cause temporary sensitivity, and the final shade may differ slightly from natural teeth. I will care for the temporary restoration and return for permanent cementation within the time advised, failing which it may break or fail.' },
+  { n:7, title:'Endodontics (root canal)',
+    text:'Root canal treatment may involve instrument breakage, perforation, or flare-up, and its success cannot be guaranteed. A tooth that cannot be saved may still require extraction.' },
+  { n:8, title:'Periodontal disease',
+    text:'Inflammation of the gums and supporting bone may persist or recur despite treatment and may lead to tooth loss. Periodontal treatment options, including the option of no treatment, have been explained to me.' },
+  { n:9, title:'Fillings',
+    text:'A restored tooth may be sensitive to heat, cold, or pressure, which usually settles with time. I will avoid chewing hard food on it for 24 hours and understand that a fractured filling may later require root canal treatment or a crown.' },
+  { n:10, title:'Dentures',
+    text:'New dentures require an adjustment period and may cause sore spots that need correction. Relines, remakes, or rescheduled delivery caused by missed appointments may involve additional fees.' },
+];
+
+const STORE_KEY = 'gdc.consent.saved.';   // + 'patient' | 'dentist'
+
+/* ------------------------------------------------------------------ */
+/* State                                                               */
+/* ------------------------------------------------------------------ */
+const state = {
+  initials: {},              // { 1: dataURL, ... }
+  inked: { patient:false, dentist:false },
+  confirmed: false,
+  meta: null,
+};
+
+const $ = id => document.getElementById(id);
+
+let toastTimer;
+function toast(msg){
+  const el = $('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+/* ------------------------------------------------------------------ */
+/* Signature pad factory                                               */
+/* ------------------------------------------------------------------ */
+function makePad(canvas, wrapEl, onInk){
+  const ctx = canvas.getContext('2d');
+  let drawing = false, inked = false;
+
+  function paint(){
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const snapshot = inked ? canvas.toDataURL() : null;
+
+    canvas.width  = Math.max(1, Math.round(rect.width  * dpr));
+    canvas.height = Math.max(1, Math.round(rect.height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.lineWidth = 2.1;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#0b1b26';
+
+    if (snapshot){
+      const img = new Image();
+      img.onload = () => ctx.drawImage(img, 0, 0, rect.width, rect.height);
+      img.src = snapshot;
+    }
+  }
+
+  function pos(e){
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  canvas.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+    drawing = true;
+    const p = pos(e);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x + 0.1, p.y + 0.1);
+    ctx.stroke();
+    if (!inked){ inked = true; if (wrapEl) wrapEl.classList.add('inked'); onInk && onInk(true); }
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!drawing) return;
+    const p = pos(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  });
+  ['pointerup','pointercancel','pointerleave'].forEach(ev =>
+    canvas.addEventListener(ev, () => { drawing = false; }));
+
+  return {
+    paint,
+    get inked(){ return inked; },
+    clear(){
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      inked = false;
+      if (wrapEl) wrapEl.classList.remove('inked');
+      onInk && onInk(false);
+    },
+    dataURL(){ return inked ? canvas.toDataURL('image/png') : null; },
+    load(dataURL){
+      const rect = canvas.getBoundingClientRect();
+      const img = new Image();
+      img.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const r = Math.min(rect.width / img.width, rect.height / img.height);
+        const w = img.width * r, h = img.height * r;
+        ctx.drawImage(img, (rect.width - w) / 2, (rect.height - h) / 2, w, h);
+        inked = true;
+        if (wrapEl) wrapEl.classList.add('inked');
+        onInk && onInk(true);
+      };
+      img.src = dataURL;
+    },
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* The three pads                                                      */
+/* ------------------------------------------------------------------ */
+const pads = {
+  patient: makePad($('padPatient'), $('wrapPatient'), on => {
+    state.inked.patient = on;
+    $('dotPatient').classList.toggle('on', on);
+    $('whoPatient').textContent = on ? 'Signed' : 'Not signed';
+    update();
+  }),
+  dentist: makePad($('padDentist'), $('wrapDentist'), on => {
+    state.inked.dentist = on;
+    $('dotDentist').classList.toggle('on', on);
+    $('whoDentist').textContent = on ? 'Signed' : 'Not signed';
+    update();
+  }),
+};
+
+let initialPad = null;      // built when the modal first opens
+let editingClause = null;
+
+/* each pad remembers its own last signature, so "adopt" reuses the right one */
+['patient','dentist'].forEach(who => {
+  $('pad' + who[0].toUpperCase() + who.slice(1)).addEventListener('pointerup', () => {
+    const url = pads[who].dataURL();
+    if (url){ try{ localStorage.setItem(STORE_KEY + who, url); }catch(e){} }
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Clause list                                                         */
+/* ------------------------------------------------------------------ */
+function buildClauses(){
+  const host = $('clauses');
+  host.innerHTML = '';
+
+  CLAUSES.forEach(c => {
+    const row = document.createElement('div');
+    row.className = 'clause';
+    row.dataset.n = c.n;
+
+    const left = document.createElement('div');
+    const h = document.createElement('h3');
+    const num = document.createElement('span');
+    num.className = 'n';
+    num.textContent = c.n;
+    h.append(num, document.createTextNode(c.title));
+    const p = document.createElement('p');
+    p.textContent = c.text;
+    left.append(h, p);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'init-btn';
+    btn.dataset.clause = c.n;
+    btn.title = 'Add your initial for clause ' + c.n;
+    btn.addEventListener('click', () => openModal(c.n));
+
+    row.append(left, btn);
+    host.appendChild(row);
+  });
+}
+
+function paintClauses(){
+  CLAUSES.forEach(c => {
+    const row = document.querySelector('.clause[data-n="' + c.n + '"]');
+    const btn = row.querySelector('.init-btn');
+    const url = state.initials[c.n];
+    btn.innerHTML = '';
+    if (url){
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = 'Initial ' + c.n;
+      const chk = document.createElement('span');
+      chk.className = 'check';
+      chk.textContent = '✓';
+      btn.append(img, chk);
+      btn.classList.add('done');
+      row.classList.add('done');
+    } else {
+      btn.appendChild(document.createTextNode('Initial'));
+      btn.classList.remove('done');
+      row.classList.remove('done');
+    }
+  });
+  const n = Object.keys(state.initials).length;
+  $('clauseCount').textContent = n + ' of ' + CLAUSES.length + ' initialed';
+  $('clauseCount').style.color = n === CLAUSES.length ? 'var(--ok)' : 'var(--soft)';
+}
+
+/* ------------------------------------------------------------------ */
+/* Modal                                                               */
+/* ------------------------------------------------------------------ */
+function openModal(n){
+  if (state.confirmed){ toast('This consent has already been confirmed.'); return; }
+  editingClause = n;
+  const c = CLAUSES.find(x => x.n === n);
+  $('modalTitle').textContent = 'Initial — clause ' + n;
+  $('modalSub').textContent = c.title + '. Draw or type your initials, then save.';
+  $('modal').classList.add('open');
+  $('modal').dataset.tab = 'draw';
+  setTab('draw');
+  $('initText').value = '';
+  $('initPreview').hidden = true;
+
+  if (!initialPad){
+    initialPad = makePad($('padInitial'), document.querySelector('#tabDraw .pad-wrap'), null);
+  }
+  initialPad.clear();
+  $('initRemove').hidden = !state.initials[n];
+
+  /* let the canvas settle at its real size, then paint */
+  requestAnimationFrame(() => { initialPad.paint(); initialPad.clear(); });
+}
+
+function closeModal(){
+  $('modal').classList.remove('open');
+  editingClause = null;
+}
+
+function setTab(tab){
+  $('modal').dataset.tab = tab;
+  [...$('initTabs').children].forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  $('tabDraw').hidden = tab !== 'draw';
+  $('tabType').hidden = tab !== 'type';
+  if (tab === 'type') $('initText').focus();
+}
+
+/* typed initials -> handwritten-looking PNG */
+function typedInitialsDataURL(text){
+  const c = document.createElement('canvas');
+  c.width = 420; c.height = 180;
+  const x = c.getContext('2d');
+  const font = 'italic 700 104px "Segoe Script","Brush Script MT","Lucida Handwriting",cursive';
+  x.font = font;
+  x.fillStyle = '#0b1b26';
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.fillText(text, c.width / 2, c.height / 2 + 6);
+  return c.toDataURL('image/png');
+}
+
+function renderTypedPreview(){
+  const text = $('initText').value.trim();
+  if (!text){ $('initPreview').hidden = true; return; }
+  $('initPreview').src = typedInitialsDataURL(text);
+  $('initPreview').hidden = false;
+}
+
+/* ------------------------------------------------------------------ */
+/* Enable / disable + status                                           */
+/* ------------------------------------------------------------------ */
+function update(){
+  const n = Object.keys(state.initials).length;
+  const need = [];
+  if (n < CLAUSES.length) need.push((CLAUSES.length - n) + ' of ' + CLAUSES.length + ' clauses initialed');
+  if (!state.inked.patient) need.push('patient signature');
+  if (!state.inked.dentist) need.push('dentist signature');
+
+  $('btnConfirm').disabled = need.length > 0 || state.confirmed;
+  const pill = $('statusPill');
+  const text = $('statusText');
+
+  if (state.confirmed){
+    pill.className = 'pill ok';
+    pill.textContent = 'Confirmed';
+    text.textContent = 'Consent recorded. Nothing was sent anywhere — this is a demo.';
+  } else if (need.length){
+    pill.className = 'pill warn';
+    pill.textContent = 'Incomplete';
+    text.textContent = 'Still needed: ' + need.join(' · ');
+  } else {
+    pill.className = 'pill ok';
+    pill.textContent = 'Ready';
+    text.textContent = 'All 10 clauses initialed and both signatures captured — ready to confirm.';
+  }
+  paintClauses();
+}
+
+/* ------------------------------------------------------------------ */
+/* Metadata + record                                                   */
+/* ------------------------------------------------------------------ */
+async function fetchIP(){
+  try{
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 2500);
+    const r = await fetch('https://api.ipify.org?format=json', { signal: ctrl.signal });
+    clearTimeout(t);
+    const j = await r.json();
+    return j.ip || 'not available';
+  }catch(e){
+    return 'not available offline';
+  }
+}
+
+async function buildRecord(){
+  const now = new Date();
+  const meta = {
+    captured_at: now.toISOString(),
+    date: now.toLocaleDateString(),
+    time: now.toLocaleTimeString(),
+    ip_address: await fetchIP(),
+    user_agent: navigator.userAgent,
+    screen: window.screen.width + '×' + window.screen.height,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  };
+  state.meta = meta;
+
+  return {
+    form: 'informed_consent',
+    form_version: '2026.1',
+    step: '3 of 4',
+    meta,
+    clauses: CLAUSES.map(c => ({
+      no: c.n,
+      title: c.title,
+      initialed: !!state.initials[c.n],
+      initial_image: state.initials[c.n] || null,
+    })),
+    disclaimer: 'I understand that dentistry is not an exact science and that no dentist can properly guarantee accurate results all the time.',
+    signatures: {
+      patient: { method: 'canvas', image: pads.patient.dataURL() },
+      dentist: { method: 'canvas', image: pads.dentist.dataURL() },
+    },
+    consent_given: true,
+  };
+}
+
+function paintMeta(){
+  const m = state.meta;
+  const rows = [
+    ['Date', m.date],
+    ['Time', m.time],
+    ['IP address', m.ip_address],
+    ['Time zone', m.timezone],
+    ['Screen', m.screen],
+    ['Captured at', m.captured_at],
+    ['User agent', m.user_agent],
+  ];
+  $('metaGrid').innerHTML = '';
+  rows.forEach(([k, v]) => {
+    const kv = document.createElement('div');
+    kv.className = 'kv';
+    const a = document.createElement('div');
+    a.className = 'k';
+    a.textContent = k;
+    const b = document.createElement('div');
+    b.className = 'v';
+    b.textContent = v;
+    kv.append(a, b);
+    $('metaGrid').appendChild(kv);
+  });
+  $('resultRight').textContent = m.date + ' · ' + m.time;
+}
+
+/* ------------------------------------------------------------------ */
+/* Wiring                                                              */
+/* ------------------------------------------------------------------ */
+$('modalClose').addEventListener('click', closeModal);
+$('modalCancel').addEventListener('click', closeModal);
+$('modal').addEventListener('click', e => { if (e.target === $('modal')) closeModal(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('modal').classList.contains('open')) closeModal();
+});
+
+$('initTabs').addEventListener('click', e => {
+  const b = e.target.closest('button[data-tab]');
+  if (b) setTab(b.dataset.tab);
+});
+
+$('initText').addEventListener('input', renderTypedPreview);
+
+$('initClear').addEventListener('click', () => {
+  if (initialPad) initialPad.clear();
+  $('initPreview').hidden = true;
+});
+
+$('initRemove').addEventListener('click', () => {
+  if (editingClause != null){
+    delete state.initials[editingClause];
+    update();
+    closeModal();
+    toast('Initial removed from clause ' + editingClause + '.');
+  }
+});
+
+$('initSave').addEventListener('click', () => {
+  if (editingClause == null) return;
+  const tab = $('modal').dataset.tab;
+  let url = null;
+
+  if (tab === 'type'){
+    const text = $('initText').value.trim();
+    if (!text){ toast('Type your initials first.'); $('initText').focus(); return; }
+    url = typedInitialsDataURL(text);
+  } else {
+    url = initialPad ? initialPad.dataURL() : null;
+    if (!url){ toast('Draw your initials first.'); return; }
+  }
+
+  state.initials[editingClause] = url;
+  update();
+  closeModal();
+  toast('Clause ' + editingClause + ' initialed.');
+});
+
+document.querySelectorAll('[data-clear]').forEach(b => {
+  b.addEventListener('click', () => {
+    const who = b.dataset.clear;
+    pads[who].clear();
+    update();
+  });
+});
+
+document.querySelectorAll('[data-adopt]').forEach(b => {
+  b.addEventListener('click', () => {
+    const who = b.dataset.adopt;
+    let saved = null;
+    try{ saved = localStorage.getItem(STORE_KEY + who); }catch(e){}
+    if (!saved){
+      toast('No saved ' + who + ' signature on this device yet — sign this pad once and it will be remembered.');
+      return;
+    }
+    pads[who].load(saved);
+    toast('Saved signature adopted for the ' + who + '.');
+  });
+});
+
+$('btnPreview').addEventListener('click', async () => {
+  const rec = await buildRecord();
+  $('json').textContent = JSON.stringify(rec, null, 2);
+  paintMeta();
+  $('resultCard').hidden = false;
+  $('resultCard').scrollIntoView({ behavior:'smooth', block:'start' });
+  toast('Preview only — nothing was saved.');
+});
+
+$('btnConfirm').addEventListener('click', async () => {
+  const rec = await buildRecord();
+  state.confirmed = true;
+  $('json').textContent = JSON.stringify(rec, null, 2);
+  paintMeta();
+  $('resultCard').hidden = false;
+  update();
+  $('resultCard').scrollIntoView({ behavior:'smooth', block:'start' });
+  toast('Consent confirmed — demo only, nothing was saved.');
+});
+
+$('btnReset').addEventListener('click', () => {
+  state.initials = {};
+  state.confirmed = false;
+  state.meta = null;
+  pads.patient.clear();
+  pads.dentist.clear();
+  $('resultCard').hidden = true;
+  update();
+  toast('Consent form reset.');
+});
+
+$('btnPrint').addEventListener('click', () => window.print());
+
+/* ------------------------------------------------------------------ */
+/* Mode switch + one-page fit check                                    */
+/* ------------------------------------------------------------------ */
+const PAD_PX = 12 / 25.4 * 96;
+
+function checkSheetFit(){
+  const sheet = $('sheet'), badge = $('fitBadge');
+  if (document.body.dataset.mode !== 'print'){ badge.hidden = true; return; }
+  badge.hidden = false;
+  const usable = 11 * 96 - PAD_PX * 2;
+  const contentH = sheet.scrollHeight - PAD_PX * 2;
+  const over = Math.round(contentH - usable);
+  if (over > 2){
+    badge.className = 'fit-badge bad';
+    badge.textContent = 'Overflow +' + over + 'px — content spills to a 2nd page';
+  } else {
+    badge.className = 'fit-badge';
+    badge.textContent = 'Fits one Letter page (' + Math.round(usable - contentH) + 'px spare)';
+  }
+}
+
+$('modeSeg').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-mode]');
+  if (!btn) return;
+  document.body.dataset.mode = btn.dataset.mode;
+  [...document.querySelectorAll('#modeSeg button')].forEach(b => b.classList.toggle('on', b === btn));
+  window.scrollTo({ top:0, behavior:'smooth' });
+  checkSheetFit();
+});
+
+/* ------------------------------------------------------------------ */
+/* Boot                                                                */
+/* ------------------------------------------------------------------ */
+buildClauses();
+update();
+
+function paintAllPads(){ pads.patient.paint(); pads.dentist.paint(); }
+paintAllPads();
+window.addEventListener('resize', () => { paintAllPads(); checkSheetFit(); });
+/* canvases have zero size while hidden, so repaint once layout is ready */
+window.addEventListener('load', () => { paintAllPads(); checkSheetFit(); });
+
+if (/[?&]mode=print/.test(location.search)){
+  document.body.dataset.mode = 'print';
+  [...document.querySelectorAll('#modeSeg button')].forEach(b =>
+    b.classList.toggle('on', b.dataset.mode === 'print'));
+}
+checkSheetFit();
+</script>
+</body>
+</html>

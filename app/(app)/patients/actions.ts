@@ -13,7 +13,7 @@ import {
   treatmentSchema,
 } from "@/lib/security/validators";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { localIso, validateBooking } from "@/lib/clinical/schedule";
+import { clinicTodayKey, localIso, validateBooking } from "@/lib/clinical/schedule";
 import { LIVE_APPOINTMENT_STATUSES, type AppointmentStatus } from "@/lib/types";
 
 /**
@@ -491,17 +491,41 @@ export async function recordConsent(
 }
 
 // =====================================================================
-// Treatment history  (Scope 4 — dentist only, enforced by RLS as well)
+// Treatment history
+//
+// A dentist records their own work; a secretary may transcribe a treatment on
+// a named dentist's behalf. Either way `performed_by` is the dentist and
+// `recorded_by` is whoever typed it, so the ledger never credits the typist
+// with the procedure. RLS enforces the same rule.
 // =====================================================================
+async function dentistForBranch(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  dentistId: string,
+  branchId: string
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("staff")
+    .select("id, role, branch_id, is_active")
+    .eq("id", dentistId)
+    .maybeSingle();
+  return Boolean(
+    data &&
+      data.role === "dentist" &&
+      data.is_active === true &&
+      (!data.branch_id || data.branch_id === branchId)
+  );
+}
+
 export async function recordTreatment(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
   const session = await requireStaff();
-  if (session.role !== "dentist" && session.role !== "admin") {
+  const clinical = session.role === "dentist" || session.role === "admin";
+  if (!clinical && session.role !== "secretary") {
     return {
       ok: false,
-      message: "Only the dentist can record a treatment entry.",
+      message: "Only clinic staff can record a treatment entry.",
     };
   }
 
@@ -515,6 +539,7 @@ export async function recordTreatment(
     procedure_name: String(formData.get("procedure_name") ?? ""),
     notes: String(formData.get("notes") ?? ""),
     performed_at: String(formData.get("performed_at") ?? ""),
+    performed_by: String(formData.get("performed_by") ?? "") || null,
   });
 
   if (!parsed.success) {
@@ -526,7 +551,43 @@ export async function recordTreatment(
   }
   const t = parsed.data;
 
+  // The clinical author is always named, never inferred from whoever is
+  // signed in. A dentist defaults to themselves; a secretary must choose.
+  const performedBy = t.performed_by ?? (clinical ? session.userId : null);
+  if (!performedBy) {
+    return {
+      ok: false,
+      message: "Choose the dentist who performed this treatment.",
+      fieldErrors: { performed_by: "Choose a dentist" },
+    };
+  }
+
+  if (session.role === "secretary" && session.branchId !== t.branch_id) {
+    return {
+      ok: false,
+      message: "You can only record treatments for your own branch.",
+    };
+  }
+
   const supabase = await createSupabaseServerClient();
+  if (!(await dentistForBranch(supabase, performedBy, t.branch_id))) {
+    return {
+      ok: false,
+      message: "Choose an active dentist who works at that branch.",
+      fieldErrors: { performed_by: "Dentist not available at this branch" },
+    };
+  }
+
+  const today = clinicTodayKey();
+  const performedOn = t.performed_at || today;
+  if (performedOn > today) {
+    return {
+      ok: false,
+      message: "The date performed cannot be in the future.",
+      fieldErrors: { performed_at: "Use today or an earlier date" },
+    };
+  }
+
   const { error } = await supabase.from("treatment_records").insert({
     patient_id: t.patient_id,
     appointment_id: nullable(t.appointment_id),
@@ -536,12 +597,12 @@ export async function recordTreatment(
     procedure_code: nullable(t.procedure_code),
     procedure_name: t.procedure_name,
     notes: nullable(t.notes),
-    // A backdated chart entry is normal in dentistry, but only the dentist
-    // reaches this action at all.
-    performed_at: t.performed_at
-      ? new Date(`${t.performed_at}T00:00:00`).toISOString()
-      : new Date().toISOString(),
-    performed_by: session.userId,
+    // A date-only entry is stored at noon clinic time: midnight would display
+    // as the previous day in UTC and as 12:00 AM to the clinic.
+    performed_at: localIso(performedOn, "12:00"),
+    performed_by: performedBy,
+    recorded_by: session.userId,
+    recorded_role: session.role,
     created_by: session.userId,
   });
 
@@ -553,7 +614,12 @@ export async function recordTreatment(
     email: session.email,
     entityType: "treatment",
     entityId: t.patient_id,
-    details: { procedure_code: t.procedure_code ?? null },
+    details: {
+      procedure_code: t.procedure_code ?? null,
+      performed_by: performedBy,
+      recorded_role: session.role,
+      backdated: performedOn !== today,
+    },
   });
 
   revalidatePath(`/patients/${t.patient_id}`);
@@ -590,17 +656,23 @@ export async function deleteTreatment(id: string): Promise<ActionState> {
 }
 
 // =====================================================================
-// Dental record chart  (Scope 4 — dentist/admin only)
+// Dental record chart
+//
+// The dentist authors the examination; a secretary may type it in — including
+// from a paper chart — and may correct her own typing until the clinic day
+// ends. The date is the visit's date ("examined on"), not the moment it was
+// typed; `created_at` keeps that distinction visible.
 // =====================================================================
 export async function saveChartExamination(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
   const session = await requireStaff();
-  if (session.role !== "dentist" && session.role !== "admin") {
+  const clinical = session.role === "dentist" || session.role === "admin";
+  if (!clinical && session.role !== "secretary") {
     return {
       ok: false,
-      message: "Only the dentist can save a dental chart examination.",
+      message: "Only clinic staff can record a dental chart.",
     };
   }
 
@@ -621,6 +693,8 @@ export async function saveChartExamination(
     patient_id: String(formData.get("patient_id") ?? ""),
     branch_id: String(formData.get("branch_id") ?? ""),
     appointment_id: String(formData.get("appointment_id") ?? "") || null,
+    examined_by: String(formData.get("examined_by") ?? "") || null,
+    examined_on: String(formData.get("examined_on") ?? ""),
     exam: (raw as { exam?: unknown } | null)?.exam,
     findings: (raw as { findings?: unknown } | null)?.findings,
   });
@@ -634,6 +708,46 @@ export async function saveChartExamination(
   }
   const d = parsed.data;
 
+  // Present only when correcting an entry, never when saving a new visit.
+  const correctionId = nullable(String(formData.get("examination_id") ?? ""));
+
+  // The clinical author is always named. A dentist defaults to themselves; a
+  // secretary must pick one, and the database rejects an unnamed examiner too.
+  const examinedBy = d.examined_by ?? (clinical ? session.userId : null);
+  if (!examinedBy) {
+    return {
+      ok: false,
+      message: "Choose the dentist who examined this patient.",
+      fieldErrors: { examined_by: "Choose a dentist" },
+    };
+  }
+
+  if (!clinical && session.branchId !== d.branch_id) {
+    return {
+      ok: false,
+      message: "You can only chart for the branch you are assigned to.",
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  if (!(await dentistForBranch(supabase, examinedBy, d.branch_id))) {
+    return {
+      ok: false,
+      message: "Choose an active dentist who works at that branch.",
+      fieldErrors: { examined_by: "Dentist not available at this branch" },
+    };
+  }
+
+  const today = clinicTodayKey();
+  const examinedOn = d.examined_on || today;
+  if (examinedOn > today) {
+    return {
+      ok: false,
+      message: "The examination date cannot be in the future.",
+      fieldErrors: { examined_on: "Use today or an earlier date" },
+    };
+  }
+
   const findings = d.findings.map((f) => ({
     tooth_fdi: f.tooth_fdi,
     condition_code: f.condition_code,
@@ -642,7 +756,49 @@ export async function saveChartExamination(
     comment: f.comment ?? null,
   }));
 
-  const supabase = await createSupabaseServerClient();
+  // Correcting a transcription: rewrite the same snapshot. The RPC and the RLS
+  // policies decide whether this caller may do so (a secretary only on her own
+  // entry, same clinic day); the visit date and the dentist stay frozen.
+  if (correctionId) {
+    const { data: priorRows } = await supabase
+      .from("chart_findings")
+      .select("id")
+      .eq("examination_id", correctionId);
+
+    const { error } = await supabase.rpc("update_chart_examination", {
+      p_examination: correctionId,
+      p_exam: d.exam,
+      p_findings: findings,
+    });
+
+    if (error) {
+      return {
+        ok: false,
+        message: `Could not save the correction: ${error.message}`,
+      };
+    }
+
+    await auditLog({
+      action: AUDIT.chartCorrected,
+      userId: session.userId,
+      email: session.email,
+      entityType: "chart",
+      entityId: d.patient_id,
+      details: {
+        examination_id: correctionId,
+        finding_count: findings.length,
+        previous_finding_count: priorRows?.length ?? null,
+        examined_by: examinedBy,
+        recorded_role: session.role,
+      },
+    });
+
+    revalidatePath(`/patients/${d.patient_id}`);
+    redirect(
+      `/patients/${d.patient_id}?tab=chart&exam=${correctionId}&corrected=1`
+    );
+  }
+
   // One transaction: an examination without its findings would read as
   // "nothing wrong with this patient", which is the worst way to fail.
   const { data, error } = await supabase.rpc("save_chart_examination", {
@@ -651,6 +807,10 @@ export async function saveChartExamination(
     p_branch: d.branch_id,
     p_exam: d.exam,
     p_findings: findings,
+    p_examined_by: examinedBy,
+    // Noon clinic time keeps a date-only entry on the day it happened in every
+    // timezone the record might be read from.
+    p_examined_at: localIso(examinedOn, "12:00"),
   });
 
   if (error) {
@@ -672,6 +832,9 @@ export async function saveChartExamination(
       finding_count: findings.length,
       teeth_charted: new Set(findings.map((f) => f.tooth_fdi)).size,
       appointment_linked: Boolean(d.appointment_id),
+      examined_by: examinedBy,
+      recorded_role: session.role,
+      backdated: examinedOn !== today,
     },
   });
 
@@ -679,6 +842,58 @@ export async function saveChartExamination(
   redirect(
     `/patients/${d.patient_id}?tab=chart${examinationId ? `&exam=${examinationId}` : ""}&saved=1`
   );
+}
+
+/**
+ * Removes a chart snapshot. The UI only offers this for a secretary's own
+ * same-day entry; RLS is what actually enforces it, so a dentist/admin request
+ * still works and anyone else gets a refusal from the database.
+ */
+export async function deleteChartExamination(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const session = await requireStaff();
+
+  const examinationId = String(formData.get("examination_id") ?? "");
+  const patientId = String(formData.get("patient_id") ?? "");
+  if (!examinationId || !patientId) {
+    return { ok: false, message: "That entry could not be identified." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("chart_examinations")
+    .delete()
+    .eq("id", examinationId)
+    .select("id, recorded_by, recorded_role")
+    .maybeSingle();
+
+  if (error) {
+    return { ok: false, message: `Could not remove the entry: ${error.message}` };
+  }
+  if (!data) {
+    return {
+      ok: false,
+      message:
+        "That entry can no longer be removed. Ask the dentist or an administrator.",
+    };
+  }
+
+  await auditLog({
+    action: AUDIT.chartDeleted,
+    userId: session.userId,
+    email: session.email,
+    entityType: "chart",
+    entityId: patientId,
+    details: {
+      examination_id: examinationId,
+      recorded_role: data.recorded_role ?? null,
+    },
+  });
+
+  revalidatePath(`/patients/${patientId}`);
+  redirect(`/patients/${patientId}?tab=chart`);
 }
 
 // =====================================================================

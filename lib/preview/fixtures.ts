@@ -359,6 +359,10 @@ export const previewTreatments = TREATMENT_SEED.map((t, i) => {
     notes: t.notes ?? null,
     performed_by: previewStaff[0].id,
     performed_at: at(-t.daysAgo, "11:00"),
+    // The first entry demonstrates the paper workflow: the dentist performed
+    // it, the secretary typed it in.
+    recorded_by: i === 0 ? previewStaff[1].id : previewStaff[0].id,
+    recorded_role: i === 0 ? "secretary" : "dentist",
     created_by: previewStaff[0].id,
     created_at: at(-t.daysAgo, "11:05"),
     updated_by: previewStaff[0].id,
@@ -442,6 +446,8 @@ export const previewChartExaminations = CHART_SEED.map((c, i) => {
     notes: c.notes,
     examined_by: previewStaff[0].id,
     examined_at: at(-c.daysAgo, "11:30"),
+    recorded_by: i === 0 ? previewStaff[1].id : previewStaff[0].id,
+    recorded_role: i === 0 ? "secretary" : "dentist",
     created_by: previewStaff[0].id,
     created_at: at(-c.daysAgo, "11:35"),
     updated_at: at(-c.daysAgo, "11:35"),

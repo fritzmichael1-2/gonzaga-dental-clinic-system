@@ -86,12 +86,41 @@ values ('Reyes', 'Maria', :MAIN_BRANCH)
 returning patient_no as second_patient_no;
 reset role;
 
-\echo '== 6. SECRETARY must NOT be able to record a clinical treatment =='
+\echo '== 6a. SECRETARY cannot record a treatment without naming a dentist =='
+-- The clinical author is never inferred from whoever is signed in: an entry
+-- with no `performed_by` has no dentist behind it and must be refused.
 set role authenticated;
 set request.jwt.claim.sub = :'SECRETARY';
 insert into public.treatment_records (patient_id, branch_id, procedure_name)
 select id, branch_id, 'Unauthorized fill' from public.patients limit 1;
 -- expect ERROR: new row violates row-level security policy
+reset role;
+
+\echo '== 6b. SECRETARY CAN transcribe a treatment on the dentist''s behalf =='
+-- The clinic's dentist charts on paper, so the desk types it in. `performed_by`
+-- stays the dentist; `recorded_by` is the person who typed it.
+set role authenticated;
+set request.jwt.claim.sub = :'SECRETARY';
+insert into public.treatment_records
+  (patient_id, branch_id, procedure_name, tooth_fdi, performed_by, recorded_by, recorded_role)
+select p.id, p.branch_id, 'Composite (dictated)', '16', :'DENTIST', :'SECRETARY', 'secretary'
+from public.patients p order by p.created_at limit 1
+returning performed_by as dentist, recorded_by as transcriber, recorded_role;
+reset role;
+
+\echo '== 6c. SECRETARY CAN transcribe a chart, but cannot rewrite who examined =='
+set role authenticated;
+set request.jwt.claim.sub = :'SECRETARY';
+insert into public.chart_examinations
+  (patient_id, branch_id, examined_by, recorded_by, recorded_role, notes)
+select p.id, p.branch_id, :'DENTIST', :'SECRETARY', 'secretary', 'Dictated from the paper chart'
+from public.patients p order by p.created_at limit 1
+returning examined_by as dentist, recorded_by as transcriber;   -- expect dentist / secretary
+-- "Fix the typo" must not become "change who diagnosed it": the guard trigger
+-- refuses any change to the attribution, even on the day it was entered.
+update public.chart_examinations set examined_by = :'SECRETARY'
+where recorded_role = 'secretary';
+-- expect ERROR: the examining dentist and the entry date cannot be changed
 reset role;
 
 \echo '== 7. DENTIST CAN record a treatment =='

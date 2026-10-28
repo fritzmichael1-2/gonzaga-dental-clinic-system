@@ -78,9 +78,11 @@ const EMBEDS: Record<string, Record<string, { fk: string; target: string }>> = {
     patients: { fk: "patient_id", target: "patients" },
     branches: { fk: "branch_id", target: "branches" },
     staff: { fk: "performed_by", target: "staff" },
+    recorder: { fk: "recorded_by", target: "staff" },
   },
   chart_examinations: {
     staff: { fk: "examined_by", target: "staff" },
+    recorder: { fk: "recorded_by", target: "staff" },
   },
   patients: { branches: { fk: "branch_id", target: "branches" } },
   staff: { branches: { fk: "branch_id", target: "branches" } },
@@ -96,11 +98,14 @@ const EMBEDS: Record<string, Record<string, { fk: string; target: string }>> = {
 function attachEmbeds(row: Row, table: string, select: string): Row {
   const out: Row = { ...row };
   const map = EMBEDS[table] ?? {};
-  const re = /([a-z_]+)\s*\(([^)]*)\)/g;
+  // `alias:table!fk_hint ( cols )` and the plain `table ( cols )` form both
+  // arrive here; PostgREST needs the hint when a table has two foreign keys to
+  // the same target (who performed it vs who typed it).
+  const re = /(?:([a-z_]+):)?([a-z_]+)(?:![a-z_]+)?\s*\(([^)]*)\)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(select)) !== null) {
-    const alias = m[1];
-    const cols = m[2]
+    const alias = m[1] ?? m[2];
+    const cols = m[3]
       .split(",")
       .map((c) => c.trim())
       .filter(Boolean);
@@ -145,7 +150,12 @@ function project(row: Row, select: string): Row {
     .split(",")
     .map((c) => c.trim())
     .filter(Boolean);
-  const names = parts.map((c) => c.split("(")[0].trim());
+  const names = parts.map((c) => {
+    // "alias:table!hint" projects to the embed alias, not to a column.
+    const head = c.split("(")[0].trim();
+    const alias = head.includes(":") ? head.split(":")[0].trim() : head;
+    return alias.split("!")[0].trim();
+  });
   const wantsAll = names.includes("*");
   const explicit = names.filter((c) => c && c !== "*");
 

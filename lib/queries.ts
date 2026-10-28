@@ -35,6 +35,8 @@ export type TreatmentWithRefs = TreatmentRecord & {
   patients: NameRef[] | null;
   branches: BranchRef[] | null;
   staff: { id: string; full_name: string }[] | null;
+  /** Who typed the entry, when it differs from who performed it. */
+  recorder: { id: string; full_name: string }[] | null;
 };
 
 /** Supabase returns a to-one embed as an array when the FK is not detected. */
@@ -54,10 +56,11 @@ const APPOINTMENT_SELECT = `
 const TREATMENT_SELECT = `
   id, patient_id, appointment_id, branch_id, tooth_fdi, tooth_surfaces,
   procedure_code, procedure_name, notes, performed_by, performed_at,
-  created_by, created_at, updated_at,
+  recorded_by, recorded_role, created_by, created_at, updated_at,
   patients ( first_name, last_name, middle_name ),
   branches ( id, name ),
-  staff ( id, full_name )
+  staff:staff!treatment_records_performed_by_fkey ( id, full_name ),
+  recorder:staff!treatment_records_recorded_by_fkey ( id, full_name )
 `;
 
 /** Appointments in a window, with patient/branch/dentist joined. */
@@ -116,14 +119,17 @@ export async function listRecentTreatments(
 export type ChartExaminationWithRefs = ChartExamination & {
   findings: ChartFinding[];
   staff: { id: string; full_name: string }[] | null;
+  /** Who typed the chart, when it was transcribed for the dentist. */
+  recorder: { id: string; full_name: string }[] | null;
 };
 
 const CHART_SELECT = `
   id, patient_id, appointment_id, branch_id, periodontal_screening,
   occlusion_class, overjet_mm, overbite, midline_deviation, crossbite,
-  appliances, tmd, notes, examined_by, examined_at, created_by, created_at,
-  updated_at,
-  staff ( id, full_name )
+  appliances, tmd, notes, examined_by, examined_at, recorded_by,
+  recorded_role, created_by, created_at, updated_at,
+  staff:staff!chart_examinations_examined_by_fkey ( id, full_name ),
+  recorder:staff!chart_examinations_recorded_by_fkey ( id, full_name )
 `;
 
 /**
@@ -323,6 +329,28 @@ export async function listAssignableDentists() {
     .select("id, full_name, role")
     .eq("is_active", true)
     .in("role", ["dentist", "admin"])
+    .order("full_name");
+  if (error) throw new Error(`staff query failed: ${error.message}`);
+  return data ?? [];
+}
+
+/**
+ * Active dentists, with the branch each one is tied to.
+ *
+ * The chart and treatment forms offer clinic-wide dentists (`branch_id` null)
+ * plus those assigned to the branch being written. Filtering happens in the UI
+ * per chosen branch and is re-checked server-side; a dentist from another
+ * branch must never be nameable as the author.
+ */
+export async function listClinicalDentists(): Promise<
+  { id: string; full_name: string; branch_id: string | null }[]
+> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("staff")
+    .select("id, full_name, branch_id")
+    .eq("is_active", true)
+    .eq("role", "dentist")
     .order("full_name");
   if (error) throw new Error(`staff query failed: ${error.message}`);
   return data ?? [];

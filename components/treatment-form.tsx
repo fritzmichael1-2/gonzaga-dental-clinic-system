@@ -5,7 +5,7 @@ import { Save } from "lucide-react";
 import type { ActionState } from "@/app/(app)/patients/actions";
 import type { Appointment, Branch } from "@/lib/types";
 import { SURFACE_LABEL, SURFACES } from "@/lib/clinical/tooth";
-import { clinicTodayKey } from "@/lib/clinical/schedule";
+import { clinicTodayKey, shiftDateKey } from "@/lib/clinical/schedule";
 import { formatDate } from "@/lib/utils";
 import ToothChart from "@/components/tooth-chart";
 
@@ -21,6 +21,9 @@ export default function TreatmentForm({
   patientId,
   branches,
   defaultBranchId,
+  dentists,
+  role,
+  currentUserId,
   appointments = [],
   existingCounts = {},
 }: {
@@ -28,6 +31,10 @@ export default function TreatmentForm({
   patientId: string;
   branches: Branch[];
   defaultBranchId: string | null;
+  /** Active dentists; filtered per chosen branch (clinic-wide ones always). */
+  dentists: { id: string; full_name: string; branch_id: string | null }[];
+  role: "dentist" | "secretary" | "admin";
+  currentUserId: string;
   /** This patient's appointments; the entry is attached to a real visit. */
   appointments?: (Appointment & { branches: { id: string; name: string }[] | null })[];
   /** Procedures already recorded per tooth, so the chart shows prior work. */
@@ -41,6 +48,19 @@ export default function TreatmentForm({
   // The clinic's day, not the server's: between 00:00 and 08:00 Manila time a UTC
   // host would otherwise default a treatment to yesterday.
   const today = clinicTodayKey();
+
+  const [branchId, setBranchId] = useState(defaultBranchId ?? "");
+  // The dentist is the clinical author; a dentist defaults to themselves and a
+  // secretary must name one. The typist goes in `recorded_by` server-side.
+  const [performedBy, setPerformedBy] = useState(
+    role === "dentist" ? currentUserId : ""
+  );
+  const [performedOn, setPerformedOn] = useState(today);
+
+  const dentistOptions = dentists.filter(
+    (d) => !d.branch_id || d.branch_id === branchId
+  );
+  const overAYear = performedOn < shiftDateKey(today, -365);
 
   /**
    * Tooth selection is one string shared by the chart and the text box, so
@@ -163,13 +183,50 @@ export default function TreatmentForm({
             id="performed_at"
             name="performed_at"
             type="date"
-            defaultValue={today}
+            value={performedOn}
+            max={today}
+            onChange={(e) => setPerformedOn(e.target.value)}
             className="field"
           />
+          {fieldErrors.performed_at && (
+            <p className="error-text mt-1">{fieldErrors.performed_at}</p>
+          )}
+          <p className={`hint mt-1 ${overAYear ? "text-warn" : ""}`}>
+            {overAYear
+              ? "That date is over a year ago — check the year."
+              : "Today or earlier."}
+          </p>
         </div>
       </div>
 
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
+        <div>
+          <label className="label" htmlFor="performed_by">
+            Performed by
+          </label>
+          <select
+            id="performed_by"
+            name="performed_by"
+            className="field"
+            value={performedBy}
+            onChange={(e) => setPerformedBy(e.target.value)}
+          >
+            <option value="">Choose the dentist</option>
+            {dentistOptions.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.full_name}
+                {!d.branch_id ? " (clinic-wide)" : ""}
+              </option>
+            ))}
+          </select>
+          {fieldErrors.performed_by && (
+            <p className="error-text mt-1">{fieldErrors.performed_by}</p>
+          )}
+          <p className="hint mt-1">
+            The dentist who did the work, not whoever typed it.
+          </p>
+        </div>
+
         <div>
           <label className="label" htmlFor="treatment_branch">
             Branch
@@ -178,7 +235,20 @@ export default function TreatmentForm({
             id="treatment_branch"
             name="branch_id"
             className="field"
-            defaultValue={defaultBranchId ?? ""}
+            value={branchId}
+            onChange={(e) => {
+              const next = e.target.value;
+              setBranchId(next);
+              setPerformedBy((prev) =>
+                dentists.some(
+                  (d) => d.id === prev && (!d.branch_id || d.branch_id === next)
+                )
+                  ? prev
+                  : role === "dentist"
+                    ? currentUserId
+                    : ""
+              );
+            }}
           >
             <option value="">Choose branch</option>
             {branches.map((b) => (

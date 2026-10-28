@@ -170,6 +170,9 @@ export type TreatmentRecord = {
   notes: string | null;
   performed_by: string | null;
   performed_at: string;
+  /** Staff member who typed the entry; `performed_by` is who did the work. */
+  recorded_by: string | null;
+  recorded_role: "dentist" | "secretary" | "admin" | null;
   amount_charged: number;
   amount_paid: number;
   created_by: string | null;
@@ -221,6 +224,9 @@ export type ChartExamination = {
   notes: string | null;
   examined_by: string | null;
   examined_at: string;
+  /** Staff member who typed the chart; `examined_by` is the dentist. */
+  recorded_by: string | null;
+  recorded_role: "dentist" | "secretary" | "admin" | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

@@ -22,7 +22,8 @@ The Gonzaga Dental Clinic Management Automation System (GDCMAS) implements a com
 - **Clinic-wide access** — Dentists and administrators have access to both branches as per their roles.
 
 ### 4. Role-Based Access Control
-- **Clinical writes restricted** — Only dentists and administrators can record treatments and consents. Secretaries cannot perform these actions, even via direct API calls.
+- **Clinical writes restricted** — A chart or a treatment always names its clinical author (the dentist). Only dentists and administrators can author one; a secretary may only transcribe an entry on a named dentist's behalf, at her own branch, and the row records both names. A secretary can correct her own transcription only on the day it was entered, and the examining dentist and entry date are frozen even then.
+- **Consents are desk work** — A secretary can record a consent at her own branch; the signature is stored with the record of who took it.
 - **Admin-only operations** — Staff management, audit log access, backup log access, patient archiving/deletion, and clinic settings are restricted to administrators only.
 - **Least privilege principle** — Each role has only the minimum permissions required to perform their job functions.
 

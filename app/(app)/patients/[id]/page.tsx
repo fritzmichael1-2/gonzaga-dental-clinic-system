@@ -9,6 +9,7 @@ import {
   listAppointments,
   listBranches,
   listChartExaminations,
+  listClinicalDentists,
   listTreatmentsForPatient,
   one,
 } from "@/lib/queries";
@@ -32,6 +33,7 @@ import IntakeSummary from "@/components/intake-summary";
 import PatientForm from "@/components/patient-form";
 import PrintButton from "@/components/print-button";
 import {
+  deleteChartExamination,
   recordConsent,
   recordTreatment,
   saveChartExamination,
@@ -64,10 +66,11 @@ export default async function PatientRecordPage({
     tab?: string;
     exam?: string;
     saved?: string;
+    corrected?: string;
   }>;
 }) {
   const { id } = await params;
-  const { created, tab, exam, saved } = await searchParams;
+  const { created, tab, exam, saved, corrected } = await searchParams;
   const session = await requireStaff();
 
   const patient = await getPatient(id);
@@ -81,6 +84,7 @@ export default async function PatientRecordPage({
     consents,
     intake,
     examinations,
+    dentists,
   ] = await Promise.all([
     listTreatmentsForPatient(id),
     listAppointments({ patientId: id, limit: 50 }),
@@ -89,6 +93,7 @@ export default async function PatientRecordPage({
     fetchConsents(id),
     getPatientIntake(id),
     listChartExaminations(id),
+    listClinicalDentists(),
   ]);
 
   // Opening a record is itself an access event (Scope 7: audit logging).
@@ -104,6 +109,13 @@ export default async function PatientRecordPage({
   const branch = one(patient.branches);
   const age = ageFrom(patient.birthdate);
   const canWrite = session.role === "dentist" || session.role === "admin";
+  // Clinical writing stays dentist/admin elsewhere; a secretary may record a
+  // chart or a treatment on a named dentist's behalf, but only at her branch.
+  const canRecord = canWrite || session.role === "secretary";
+  const writableBranches =
+    session.role === "secretary"
+      ? branches.filter((b) => b.id === session.branchId)
+      : branches;
   const activeTab = tab ?? "overview";
   const upcoming = upcomingOf(appointments);
 
@@ -283,15 +295,19 @@ export default async function PatientRecordPage({
       {activeTab === "chart" && (
         <ChartTab
           action={saveChartExamination}
+          deleteAction={deleteChartExamination}
           patientId={id}
-          branches={branches}
+          branches={writableBranches}
           defaultBranchId={patient.branch_id ?? session.branchId}
           examinations={examinations}
           appointments={appointments}
+          dentists={dentists}
+          role={session.role}
+          currentUserId={session.userId}
           treatmentCounts={counts}
-          canWrite={canWrite}
           initialExamId={exam ?? null}
           saved={saved === "1"}
+          corrected={corrected === "1"}
         />
       )}
 
@@ -328,7 +344,8 @@ export default async function PatientRecordPage({
                       <th scope="col">Tooth</th>
                       <th scope="col">Surfaces</th>
                       <th scope="col">Branch</th>
-                      <th scope="col">Recorded by</th>
+                      <th scope="col">Performed by</th>
+                      <th scope="col">Entered by</th>
                       <th scope="col">Notes</th>
                     </tr>
                   </thead>
@@ -356,6 +373,12 @@ export default async function PatientRecordPage({
                         <td className="hint whitespace-nowrap">
                           {one(t.staff)?.full_name ?? "—"}
                         </td>
+                        <td className="hint whitespace-nowrap">
+                          {one(t.recorder)?.full_name ?? "—"}
+                          {t.recorded_role === "secretary" && (
+                            <span className="ml-1 text-xs">(transcribed)</span>
+                          )}
+                        </td>
                         <td className="hint max-w-xs truncate">
                           {t.notes ?? "—"}
                         </td>
@@ -372,14 +395,23 @@ export default async function PatientRecordPage({
             )}
           </section>
 
-          {canWrite ? (
+          {canRecord ? (
             <section className="panel p-5">
               <h2 className="panel-title mb-4">Record a treatment</h2>
+              {session.role === "secretary" && (
+                <p className="mb-3 rounded-md bg-brand-tint px-3 py-2 text-sm">
+                  You can enter a treatment on the dentist&apos;s behalf. Choose
+                  the dentist who did the work — the ledger records both names.
+                </p>
+              )}
               <TreatmentForm
                 action={recordTreatment}
                 patientId={id}
-                branches={branches}
+                branches={writableBranches}
                 defaultBranchId={session.branchId}
+                dentists={dentists}
+                role={session.role}
+                currentUserId={session.userId}
                 appointments={appointments}
                 existingCounts={counts}
               />

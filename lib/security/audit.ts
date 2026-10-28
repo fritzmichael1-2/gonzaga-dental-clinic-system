@@ -67,6 +67,8 @@ export const AUDIT = {
   duplicateWarningShown: "patient.duplicate_warning",
   consentRecorded: "consent.recorded",
   chartSaved: "chart.saved",
+  chartCorrected: "chart.corrected",
+  chartDeleted: "chart.deleted",
   treatmentRecorded: "treatment.recorded",
   treatmentUpdated: "treatment.updated",
   appointmentCreated: "appointment.created",

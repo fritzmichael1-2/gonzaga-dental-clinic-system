@@ -17,7 +17,7 @@ marked `TODO(CLINIC)` and must be confirmed by the clinic itself.
 | --- | --- |
 | Patients | Digital intake form (the clinic's paper form, including medical screening and a drawn signature), duplicate detection before save, editable demographics, allergies alert |
 | Consent | Versioned consent text captured per patient, with who recorded it |
-| Treatment | FDI tooth chart, procedure codes, surfaces, who performed it and when |
+| Treatment | FDI tooth chart, procedure codes, surfaces, who performed it, who entered it, and when |
 | Appointments | Per-branch day view, slot generation from branch hours, live status changes, cross-branch pending guard |
 | Patient booking | Public `/book` page: branch + date availability, self-booking captured as `requested` |
 | Branches | Dentist/admin overview: each branch's counts, schedule, recent treatments, and open/closed status side by side |
@@ -82,7 +82,8 @@ not expose data:
 | View patients | yes | own branch | yes |
 | Create / edit patients | yes | own branch | yes |
 | Book / update appointments | yes | own branch | yes |
-| Record treatments, consents | yes | no | yes |
+| Record treatments and dental charts | yes | own branch, on a named dentist's behalf | yes |
+| Record consents | yes | own branch | yes |
 | Manage staff accounts | no | no | yes |
 | Read audit log, backup log | no | no | yes |
 
@@ -108,6 +109,25 @@ Two consequences worth knowing:
 - A secretary with no `branch_id` assigned sees no clinical rows at all. An
   unassigned account is given no branch access rather than all of them, and the
   sidebar says so.
+
+**Who did it versus who typed it.** The clinic's dentist charts on paper, so a
+secretary may enter a dental chart or a treatment on the dentist's behalf,
+including for a visit that has already happened. The clinical author is never
+inferred from whoever is signed in: a chart carries `examined_by` and a
+treatment `performed_by` (the dentist), plus `recorded_by` / `recorded_role`
+(the person who typed it), and the chart and the treatment ledger both show
+both names. The database enforces the same rule — a secretary can only name an
+active dentist assigned to that branch or a clinic-wide one, and the visit date
+must be today or earlier, stored at noon clinic time so a date-only entry never
+slides into the previous day.
+
+A secretary may also correct her own transcription, but only until the clinic
+day of entry ends: after that the snapshot is frozen and a correction needs the
+dentist or an admin. The guard trigger refuses any change to the examining
+dentist, the branch, or the entry day even on that same day, so "fix the typo"
+can never quietly reassign who diagnosed the patient. Every entry and
+correction is written to the audit log as counts and ids only — never a tooth,
+a condition, or any other clinical detail.
 
 ## Setup
 
@@ -220,10 +240,12 @@ drift apart when a bullet is edited.
 
 Both are persona-sensitive. The deck is built from the admin screenshot set. The
 video records whichever role `GDCMAS_PREVIEW_ROLE` names and names the file
-after it, because the tooth picker is dentist/admin-only (`canWrite` in
-`app/(app)/patients/[id]/page.tsx`): a secretary recording shows the read-only
-chart and says so, while a dentist recording performs the taps. A single
-canonical filename would misrepresent whichever role was configured last.
+after it, because the tooth picker behaves differently per role: a dentist
+records their own examination, while a secretary entering one on the dentist's
+behalf is asked to name the dentist first and is shown a banner saying so. A
+single canonical filename would misrepresent whichever role was configured
+last. The committed `-secretary.mp4` predates secretary transcription and
+therefore shows the older read-only chart.
 
 Preview mode also skips `cookies()` on the authenticated routes, so a build made
 with `GDCMAS_PREVIEW=1` prerenders them as static HTML. Never deploy such a
@@ -275,7 +297,7 @@ connection, placeholder data only — and every page is labelled `(DEMO)`.
 | --- | --- | --- |
 | Patient intake & medical history | `/mockups/intake-form.html` | Secretary encodes at the desk; patient or guardian signs |
 | Informed consent | `/mockups/informed-consent.html` | Patient signs, secretary assists, dentist countersigns |
-| Intraoral tooth chart (FDI) | `/mockups/index.html` | Dentist (a secretary may transcribe at dictation) |
+| Intraoral tooth chart (FDI) | `/mockups/index.html` | Dentist; a secretary may transcribe on the dentist's behalf |
 | Treatment record | `/mockups/treatment-record.html` | Secretary and dentist both update; admin restores archived entries |
 
 `/mockups` is listed in `PUBLIC_PATHS` in `proxy.ts`, so the pages open without
@@ -303,7 +325,9 @@ It asserts, among other things:
 
 - `anon` and unauthenticated requests are denied
 - an inactive staff row sees zero patients
-- a secretary cannot insert a treatment record
+- a secretary cannot insert a treatment record that names no dentist
+- a secretary can transcribe a treatment or a chart for a named dentist, and
+  then cannot rewrite who performed or examined it
 - a non-admin cannot modify the `staff` table (no self-promotion)
 - a dentist cannot be double-booked, but back-to-back slots are allowed
 - a patient cannot hold two overlapping live appointments

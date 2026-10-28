@@ -639,8 +639,11 @@ create table if not exists public.treatment_records (
   procedure_code  text,
   procedure_name  text not null,
   notes           text,
+  -- Who did the work (the dentist) versus who typed the entry.
   performed_by    uuid references public.staff(id) on delete set null,
   performed_at    timestamptz not null default now(),
+  recorded_by     uuid references public.staff(id) on delete set null,
+  recorded_role   text check (recorded_role in ('dentist', 'secretary', 'admin')),
   -- Ledger amounts. The balance bar on the treatment record reads these; until
   -- the clinic confirms how it bills (TODO(CLINIC)) they stay at zero rather
   -- than being absent, so the ledger never has to special-case a missing column.
@@ -657,6 +660,8 @@ create index if not exists treatments_patient_idx
   on public.treatment_records (patient_id, performed_at desc);
 create index if not exists treatments_branch_idx  on public.treatment_records (branch_id);
 create index if not exists treatments_perf_at_idx on public.treatment_records (performed_at desc);
+create index if not exists treatments_recorded_idx
+  on public.treatment_records (recorded_by);
 
 drop trigger if exists treatments_touch on public.treatment_records;
 create trigger treatments_touch before update on public.treatment_records
@@ -685,8 +690,12 @@ create table if not exists public.chart_examinations (
   tmd                   jsonb not null default
     '{"clenching":false,"clicking":false,"trismus":false,"muscle_spasm":false}'::jsonb,
   notes                 text,
+  -- Who examined (the dentist) versus who typed it (possibly a secretary
+  -- transcribing a paper chart). `created_by` stays the auth user for audit.
   examined_by           uuid references public.staff(id) on delete set null,
   examined_at           timestamptz not null default now(),
+  recorded_by           uuid references public.staff(id) on delete set null,
+  recorded_role         text check (recorded_role in ('dentist', 'secretary', 'admin')),
   created_by            uuid references auth.users(id) on delete set null,
   created_at            timestamptz not null default now(),
   updated_at            timestamptz not null default now()
@@ -698,6 +707,8 @@ create index if not exists chart_examinations_branch_idx
   on public.chart_examinations (branch_id);
 create index if not exists chart_examinations_appointment_idx
   on public.chart_examinations (appointment_id);
+create index if not exists chart_examinations_recorded_idx
+  on public.chart_examinations (recorded_by);
 
 drop trigger if exists chart_examinations_touch on public.chart_examinations;
 create trigger chart_examinations_touch before update on public.chart_examinations
@@ -726,15 +737,90 @@ create table if not exists public.chart_findings (
 create index if not exists chart_findings_examination_idx
   on public.chart_findings (examination_id);
 
+-- Who may be named as the clinical author for a branch: an active dentist
+-- assigned to it, or an active clinic-wide dentist. Never a dentist from
+-- another branch.
+create or replace function public.can_record_for_dentist(p_dentist uuid, p_branch uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.staff s
+    where s.id = p_dentist
+      and s.role = 'dentist'
+      and s.is_active is true
+      and (s.branch_id is null or s.branch_id = p_branch)
+  );
+$$;
+
+-- "This chart was typed by the caller and is still editable today." A
+-- secretary may correct her own transcription until the clinic day ends.
+create or replace function public.can_amend_own_chart(p_examination uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1
+    from public.chart_examinations e
+    where e.id = p_examination
+      and e.recorded_by = auth.uid()
+      and e.recorded_role = 'secretary'
+      and public.can_access_branch(e.branch_id)
+      and (e.created_at at time zone 'Asia/Manila')::date
+          = (now() at time zone 'Asia/Manila')::date
+  );
+$$;
+
+-- A transcription can be corrected; the attribution cannot. Frozen: who
+-- examined, who typed it, the branch, and the day the entry was made.
+create or replace function public.guard_secretary_chart_update()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if old.recorded_role = 'secretary' then
+    if new.examined_by   is distinct from old.examined_by
+       or new.recorded_by is distinct from old.recorded_by
+       or new.recorded_role is distinct from old.recorded_role
+       or new.branch_id  is distinct from old.branch_id
+       or new.created_at is distinct from old.created_at then
+      raise exception
+        'A transcription can be corrected, but the examining dentist and the entry date cannot be changed.'
+        using errcode = '42501';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists chart_examinations_guard_secretary on public.chart_examinations;
+create trigger chart_examinations_guard_secretary
+  before update on public.chart_examinations
+  for each row execute procedure public.guard_secretary_chart_update();
+
 -- Writes the examination and its findings in one transaction. SECURITY INVOKER
 -- (the default) keeps both RLS policies in force; it buys atomicity only.
 -- An appointment id that belongs to another patient is rejected outright.
+--
+-- The caller names the dentist ("examined by") and supplies the visit date.
+-- `coalesce(p_examined_at, now())` keeps a chart saved without a date honest:
+-- it is stamped with the moment it was typed.
 create or replace function public.save_chart_examination(
   p_patient     uuid,
   p_appointment uuid,
   p_branch      uuid,
   p_exam        jsonb,
-  p_findings    jsonb
+  p_findings    jsonb,
+  p_examined_by uuid,
+  p_examined_at timestamptz
 ) returns uuid
 language plpgsql
 security invoker
@@ -752,11 +838,19 @@ begin
       using errcode = '23514';
   end if;
 
+  -- A visit that has not happened yet is a plan, not a record.
+  if p_examined_at is not null
+     and (p_examined_at at time zone 'Asia/Manila')::date
+         > (now() at time zone 'Asia/Manila')::date then
+    raise exception 'The examination date cannot be in the future.'
+      using errcode = '23514';
+  end if;
+
   insert into public.chart_examinations (
     patient_id, appointment_id, branch_id,
     periodontal_screening, occlusion_class, overjet_mm, overbite,
     midline_deviation, crossbite, appliances, tmd, notes,
-    examined_by, created_by
+    examined_by, examined_at, created_by, recorded_by, recorded_role
   ) values (
     p_patient, p_appointment, p_branch,
     nullif(p_exam ->> 'periodontal_screening', ''),
@@ -770,7 +864,9 @@ begin
     coalesce(p_exam -> 'tmd',
              '{"clenching":false,"clicking":false,"trismus":false,"muscle_spasm":false}'::jsonb),
     nullif(p_exam ->> 'notes', ''),
-    auth.uid(), auth.uid()
+    coalesce(p_examined_by, auth.uid()),
+    coalesce(p_examined_at, now()),
+    auth.uid(), auth.uid(), public.current_role()
   ) returning id into new_id;
 
   for f in select * from jsonb_array_elements(coalesce(p_findings, '[]'::jsonb))
@@ -787,6 +883,59 @@ begin
   end loop;
 
   return new_id;
+end;
+$$;
+
+-- Rewrites one examination snapshot: assessment fields plus a fresh set of
+-- findings. RLS and the guard trigger above still apply to every row, so this
+-- is only reachable for a chart the caller may actually amend.
+create or replace function public.update_chart_examination(
+  p_examination uuid,
+  p_exam        jsonb,
+  p_findings    jsonb
+) returns uuid
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  f jsonb;
+begin
+  update public.chart_examinations set
+    periodontal_screening = nullif(p_exam ->> 'periodontal_screening', ''),
+    occlusion_class       = nullif(p_exam ->> 'occlusion_class', ''),
+    overjet_mm            = nullif(p_exam ->> 'overjet_mm', ''),
+    overbite              = nullif(p_exam ->> 'overbite', ''),
+    midline_deviation     = coalesce((p_exam ->> 'midline_deviation')::boolean, false),
+    crossbite             = coalesce((p_exam ->> 'crossbite')::boolean, false),
+    appliances            = coalesce(p_exam -> 'appliances',
+                                '{"braces":false,"stayplate":false,"other":null}'::jsonb),
+    tmd                   = coalesce(p_exam -> 'tmd',
+                                '{"clenching":false,"clicking":false,"trismus":false,"muscle_spasm":false}'::jsonb),
+    notes                 = nullif(p_exam ->> 'notes', '')
+  where id = p_examination;
+
+  if not found then
+    raise exception 'That examination can no longer be corrected.'
+      using errcode = '42501';
+  end if;
+
+  delete from public.chart_findings where examination_id = p_examination;
+
+  for f in select * from jsonb_array_elements(coalesce(p_findings, '[]'::jsonb))
+  loop
+    insert into public.chart_findings (
+      examination_id, tooth_fdi, condition_code, surfaces, comment
+    ) values (
+      p_examination,
+      f ->> 'tooth_fdi',
+      f ->> 'condition_code',
+      coalesce(f ->> 'surfaces', ''),
+      nullif(f ->> 'comment', '')
+    );
+  end loop;
+
+  return p_examination;
 end;
 $$;
 
@@ -990,14 +1139,24 @@ drop policy if exists consent_delete_clinical on public.consent_records;
 create policy "consent_delete_clinical" on public.consent_records
   for delete using (public.can_write_clinical());
 
--- treatments: readable at that branch, but only the dentist records or amends
--- clinical entries
+-- treatments: readable at that branch. A dentist records or amends clinical
+-- entries; a secretary may transcribe one on a named dentist's behalf, but can
+-- never become the performer and cannot amend it afterwards.
 drop policy if exists treatments_select_staff on public.treatment_records;
 create policy "treatments_select_staff" on public.treatment_records
   for select using (public.can_access_branch(branch_id));
 drop policy if exists treatments_insert_clinical on public.treatment_records;
 create policy "treatments_insert_clinical" on public.treatment_records
-  for insert with check (public.can_write_clinical() and public.can_access_branch(branch_id));
+  for insert with check (
+    public.can_access_branch(branch_id)
+    and (
+      public.can_write_clinical()
+      or (
+        public.current_role() = 'secretary'
+        and public.can_record_for_dentist(performed_by, branch_id)
+      )
+    )
+  );
 drop policy if exists treatments_update_clinical on public.treatment_records;
 create policy "treatments_update_clinical" on public.treatment_records
   for update using (public.can_write_clinical() and public.can_access_branch(branch_id))
@@ -1006,8 +1165,9 @@ drop policy if exists treatments_delete_clinical on public.treatment_records;
 create policy "treatments_delete_clinical" on public.treatment_records
   for delete using (public.can_write_clinical());
 
--- dental chart: the whole clinic reads it, only the dentist (or an admin)
--- charts. A secretary therefore gets a read-only chart.
+-- dental chart: the whole clinic reads it. A dentist/admin may chart directly;
+-- a secretary may transcribe on a named dentist's behalf, and may correct her
+-- own transcription on the same clinic day.
 alter table public.chart_examinations enable row level security;
 alter table public.chart_findings     enable row level security;
 
@@ -1016,16 +1176,35 @@ create policy "chart_examinations_select_staff" on public.chart_examinations
   for select using (public.can_access_branch(branch_id));
 drop policy if exists chart_examinations_insert_clinical on public.chart_examinations;
 create policy "chart_examinations_insert_clinical" on public.chart_examinations
-  for insert with check (public.can_write_clinical() and public.can_access_branch(branch_id));
+  for insert with check (
+    public.can_access_branch(branch_id)
+    and (
+      public.can_write_clinical()
+      or (
+        public.current_role() = 'secretary'
+        and public.can_record_for_dentist(examined_by, branch_id)
+      )
+    )
+  );
 drop policy if exists chart_examinations_update_clinical on public.chart_examinations;
 create policy "chart_examinations_update_clinical" on public.chart_examinations
-  for update using (public.can_write_clinical() and public.can_access_branch(branch_id))
-  with check (public.can_write_clinical() and public.can_access_branch(branch_id));
+  for update
+  using (
+    (public.can_write_clinical() and public.can_access_branch(branch_id))
+    or public.can_amend_own_chart(id)
+  )
+  with check (
+    (public.can_write_clinical() and public.can_access_branch(branch_id))
+    or public.can_amend_own_chart(id)
+  );
 drop policy if exists chart_examinations_delete_clinical on public.chart_examinations;
 create policy "chart_examinations_delete_clinical" on public.chart_examinations
-  for delete using (public.can_write_clinical());
+  for delete using (
+    public.can_write_clinical() or public.can_amend_own_chart(id)
+  );
 
--- Findings inherit their scope from the parent examination.
+-- Findings inherit their scope from the parent examination, and a secretary can
+-- only touch them while she may amend that examination.
 drop policy if exists chart_findings_select_staff on public.chart_findings;
 create policy "chart_findings_select_staff" on public.chart_findings
   for select using (exists (
@@ -1035,23 +1214,28 @@ create policy "chart_findings_select_staff" on public.chart_findings
 drop policy if exists chart_findings_insert_clinical on public.chart_findings;
 create policy "chart_findings_insert_clinical" on public.chart_findings
   for insert with check (
-    public.can_write_clinical() and exists (
+    exists (
       select 1 from public.chart_examinations e
       where e.id = examination_id and public.can_access_branch(e.branch_id)
     )
+    and (public.can_write_clinical() or public.can_amend_own_chart(examination_id))
   );
 drop policy if exists chart_findings_update_clinical on public.chart_findings;
 create policy "chart_findings_update_clinical" on public.chart_findings
-  for update using (public.can_write_clinical())
+  for update
+  using (public.can_write_clinical() or public.can_amend_own_chart(examination_id))
   with check (
-    public.can_write_clinical() and exists (
+    exists (
       select 1 from public.chart_examinations e
       where e.id = examination_id and public.can_access_branch(e.branch_id)
     )
+    and (public.can_write_clinical() or public.can_amend_own_chart(examination_id))
   );
 drop policy if exists chart_findings_delete_clinical on public.chart_findings;
 create policy "chart_findings_delete_clinical" on public.chart_findings
-  for delete using (public.can_write_clinical());
+  for delete using (
+    public.can_write_clinical() or public.can_amend_own_chart(examination_id)
+  );
 
 -- appointments: both roles manage the schedule, scoped to their branch. The
 -- branch a secretarial role can book into is decided by the slot grid, which
@@ -1340,10 +1524,12 @@ grant execute on function public.is_admin()           to authenticated;
 grant execute on function public.can_write_clinical() to authenticated;
 grant execute on function public.find_potential_duplicates(text, text, date, integer)
   to authenticated;
-revoke execute on function public.save_chart_examination(uuid, uuid, uuid, jsonb, jsonb)
+revoke execute on function public.save_chart_examination(uuid, uuid, uuid, jsonb, jsonb, uuid, timestamptz)
   from public, anon;
-grant execute on function public.save_chart_examination(uuid, uuid, uuid, jsonb, jsonb)
+grant execute on function public.save_chart_examination(uuid, uuid, uuid, jsonb, jsonb, uuid, timestamptz)
   to authenticated;
+revoke execute on function public.update_chart_examination(uuid, jsonb, jsonb) from public, anon;
+grant execute on function public.update_chart_examination(uuid, jsonb, jsonb) to authenticated;
 
 -- Branch-scope helpers are called from inside RLS policies, which are evaluated
 -- for every request role. Postgres grants execute to PUBLIC by default, and

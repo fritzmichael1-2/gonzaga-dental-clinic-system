@@ -280,6 +280,8 @@ export const treatmentSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
     .optional()
     .or(z.literal("")),
+  /** The dentist who did the work; a secretary transcribes on their behalf. */
+  performed_by: z.string().uuid().optional().nullable(),
 });
 
 // ---------------------------------------------------------------------
@@ -366,6 +368,14 @@ export const chartExaminationSchema = z
     patient_id: z.string().uuid(),
     branch_id: z.string().uuid(),
     appointment_id: z.string().uuid().optional().nullable(),
+    /** The dentist who examined: the clinical author of this chart. */
+    examined_by: z.string().uuid().optional().nullable(),
+    /** The visit date, clinic-local. The action enforces "today or earlier". */
+    examined_on: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+      .optional()
+      .or(z.literal("")),
     exam: chartExamFieldsSchema,
     findings: z
       .array(chartFindingSchema)

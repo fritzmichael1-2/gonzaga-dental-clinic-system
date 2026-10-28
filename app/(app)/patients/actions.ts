@@ -6,6 +6,7 @@ import { auditLog, AUDIT } from "@/lib/security/audit";
 import { requireStaff } from "@/lib/security/session";
 import {
   appointmentSchema,
+  chartExaminationSchema,
   consentSchema,
   intakeSchema,
   patientSchema,
@@ -586,6 +587,98 @@ export async function deleteTreatment(id: string): Promise<ActionState> {
 
   if (data?.patient_id) revalidatePath(`/patients/${data.patient_id}`);
   return { ok: true, message: "Entry removed." };
+}
+
+// =====================================================================
+// Dental record chart  (Scope 4 — dentist/admin only)
+// =====================================================================
+export async function saveChartExamination(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const session = await requireStaff();
+  if (session.role !== "dentist" && session.role !== "admin") {
+    return {
+      ok: false,
+      message: "Only the dentist can save a dental chart examination.",
+    };
+  }
+
+  // The chart posts one JSON payload because findings are a list. A malformed
+  // payload is a browser bug or a hand-crafted request, never something to
+  // guess at.
+  let raw: unknown;
+  try {
+    raw = JSON.parse(String(formData.get("payload") ?? ""));
+  } catch {
+    return {
+      ok: false,
+      message: "The chart could not be read. Reload the page and chart it again.",
+    };
+  }
+
+  const parsed = chartExaminationSchema.safeParse({
+    patient_id: String(formData.get("patient_id") ?? ""),
+    branch_id: String(formData.get("branch_id") ?? ""),
+    appointment_id: String(formData.get("appointment_id") ?? "") || null,
+    exam: (raw as { exam?: unknown } | null)?.exam,
+    findings: (raw as { findings?: unknown } | null)?.findings,
+  });
+
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: "Check the chart and try again.",
+      fieldErrors: firstErrors(parsed.error),
+    };
+  }
+  const d = parsed.data;
+
+  const findings = d.findings.map((f) => ({
+    tooth_fdi: f.tooth_fdi,
+    condition_code: f.condition_code,
+    // Stored canonically (B, M, O, D, L) by the validator.
+    surfaces: f.surfaces,
+    comment: f.comment ?? null,
+  }));
+
+  const supabase = await createSupabaseServerClient();
+  // One transaction: an examination without its findings would read as
+  // "nothing wrong with this patient", which is the worst way to fail.
+  const { data, error } = await supabase.rpc("save_chart_examination", {
+    p_patient: d.patient_id,
+    p_appointment: d.appointment_id ?? null,
+    p_branch: d.branch_id,
+    p_exam: d.exam,
+    p_findings: findings,
+  });
+
+  if (error) {
+    return { ok: false, message: `Could not save the chart: ${error.message}` };
+  }
+
+  const examinationId = typeof data === "string" ? data : null;
+
+  // Counts only. The audit log is a separate exposure surface and must never
+  // carry which tooth was decayed.
+  await auditLog({
+    action: AUDIT.chartSaved,
+    userId: session.userId,
+    email: session.email,
+    entityType: "chart",
+    entityId: d.patient_id,
+    details: {
+      examination_id: examinationId,
+      finding_count: findings.length,
+      teeth_charted: new Set(findings.map((f) => f.tooth_fdi)).size,
+      appointment_linked: Boolean(d.appointment_id),
+    },
+  });
+
+  revalidatePath(`/patients/${d.patient_id}`);
+  redirect(
+    `/patients/${d.patient_id}?tab=chart${examinationId ? `&exam=${examinationId}` : ""}&saved=1`
+  );
 }
 
 // =====================================================================

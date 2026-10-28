@@ -366,6 +366,101 @@ export const previewTreatments = TREATMENT_SEED.map((t, i) => {
   };
 }) as Record<string, unknown>[];
 
+const CHART_SEED: Array<{
+  patient: string;
+  daysAgo: number;
+  periodontal: string | null;
+  occlusion: string | null;
+  notes: string | null;
+  findings: Array<{
+    tooth: string;
+    code: string;
+    surfaces: string;
+    comment?: string;
+  }>;
+}> = [
+  {
+    patient: "0001",
+    daysAgo: 96,
+    periodontal: "Gingivitis",
+    occlusion: "Class I",
+    notes: "Full-mouth charting before the extraction.",
+    findings: [
+      { tooth: "16", code: "D", surfaces: "MO", comment: "Sensitive to cold." },
+      { tooth: "36", code: "D", surfaces: "MOD" },
+      { tooth: "46", code: "X", surfaces: "BMODL", comment: "Extracted this visit." },
+      { tooth: "18", code: "Im", surfaces: "", comment: "Partial impaction." },
+    ],
+  },
+  {
+    patient: "0001",
+    daysAgo: 12,
+    periodontal: "Healthy",
+    occlusion: "Class I",
+    notes: "Restoration completed on the upper right first molar.",
+    findings: [
+      { tooth: "16", code: "F", surfaces: "MO" },
+      { tooth: "36", code: "D", surfaces: "MOD", comment: "Watch; recheck in 6 months." },
+      { tooth: "46", code: "MO", surfaces: "BMODL", comment: "Extraction healed." },
+      { tooth: "18", code: "Im", surfaces: "", comment: "Partial impaction." },
+    ],
+  },
+  {
+    patient: "0003",
+    daysAgo: 55,
+    periodontal: "Early Periodontitis",
+    occlusion: "Class II",
+    notes: null,
+    findings: [
+      { tooth: "45", code: "D", surfaces: "MOD" },
+      { tooth: "17", code: "D", surfaces: "O" },
+      { tooth: "27", code: "RF", surfaces: "B" },
+    ],
+  },
+];
+
+export const previewChartExaminations = CHART_SEED.map((c, i) => {
+  const p = previewPatients.find((x) => x.patient_no.endsWith(c.patient))!;
+  return {
+    id: `ce000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+    patient_id: p.id,
+    appointment_id: null,
+    branch_id: p.branch_id,
+    periodontal_screening: c.periodontal,
+    occlusion_class: c.occlusion,
+    overjet_mm: "2",
+    overbite: "2",
+    midline_deviation: false,
+    crossbite: false,
+    appliances: { braces: false, stayplate: false, other: null },
+    tmd: {
+      clenching: false,
+      clicking: false,
+      trismus: false,
+      muscle_spasm: false,
+    },
+    notes: c.notes,
+    examined_by: previewStaff[0].id,
+    examined_at: at(-c.daysAgo, "11:30"),
+    created_by: previewStaff[0].id,
+    created_at: at(-c.daysAgo, "11:35"),
+    updated_at: at(-c.daysAgo, "11:35"),
+  };
+}) as Record<string, unknown>[];
+
+export const previewChartFindings = CHART_SEED.flatMap((c, i) =>
+  c.findings.map((f, k) => ({
+    id: `cf000000-0000-4000-8000-${String(i * 10 + k).padStart(12, "0")}`,
+    examination_id: `ce000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+    tooth_fdi: f.tooth,
+    tooth_type: Number(f.tooth[0]) >= 5 ? "primary" : "permanent",
+    condition_code: f.code,
+    surfaces: f.surfaces,
+    comment: f.comment ?? null,
+    created_at: at(-c.daysAgo, "11:36"),
+  }))
+) as Record<string, unknown>[];
+
 const CONSENT_SEED = [
   { patient: "0001", type: "surgery", version: "1.0", daysAgo: 96 },
   { patient: "0001", type: "treatment", version: "1.0", daysAgo: 96 },
@@ -471,6 +566,8 @@ export const previewTables: Record<string, Record<string, unknown>[]> = {
   patients: previewPatients as unknown as Record<string, unknown>[],
   appointments: previewAppointments,
   treatment_records: previewTreatments,
+  chart_examinations: previewChartExaminations,
+  chart_findings: previewChartFindings,
   consent_records: previewConsents,
   audit_logs: previewAuditLogs,
   backup_logs: previewBackups,

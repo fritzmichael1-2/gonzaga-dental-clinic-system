@@ -663,6 +663,139 @@ create trigger treatments_touch before update on public.treatment_records
   for each row execute procedure public.touch_updated_at();
 
 -- =====================================================================
+-- DENTAL RECORD CHART  (Scope 4: charted findings, kept per visit)
+-- The intraoral chart used to live entirely in React state, so it forgot
+-- everything on refresh and could not carry a finding into the next visit.
+-- One examination row per visit; one findings row per tooth + condition.
+-- See supabase/migrations/20261029_chart_examinations.sql for the rationale.
+-- =====================================================================
+create table if not exists public.chart_examinations (
+  id                    uuid primary key default gen_random_uuid(),
+  patient_id            uuid not null references public.patients(id) on delete cascade,
+  appointment_id        uuid references public.appointments(id) on delete set null,
+  branch_id             uuid not null references public.branches(id) on delete restrict,
+  periodontal_screening text,
+  occlusion_class       text,
+  overjet_mm            text,
+  overbite              text,
+  midline_deviation     boolean not null default false,
+  crossbite             boolean not null default false,
+  appliances            jsonb not null default
+    '{"braces":false,"stayplate":false,"other":null}'::jsonb,
+  tmd                   jsonb not null default
+    '{"clenching":false,"clicking":false,"trismus":false,"muscle_spasm":false}'::jsonb,
+  notes                 text,
+  examined_by           uuid references public.staff(id) on delete set null,
+  examined_at           timestamptz not null default now(),
+  created_by            uuid references auth.users(id) on delete set null,
+  created_at            timestamptz not null default now(),
+  updated_at            timestamptz not null default now()
+);
+
+create index if not exists chart_examinations_patient_idx
+  on public.chart_examinations (patient_id, examined_at desc);
+create index if not exists chart_examinations_branch_idx
+  on public.chart_examinations (branch_id);
+create index if not exists chart_examinations_appointment_idx
+  on public.chart_examinations (appointment_id);
+
+drop trigger if exists chart_examinations_touch on public.chart_examinations;
+create trigger chart_examinations_touch before update on public.chart_examinations
+  for each row execute procedure public.touch_updated_at();
+
+create table if not exists public.chart_findings (
+  id             uuid primary key default gen_random_uuid(),
+  examination_id uuid not null references public.chart_examinations(id) on delete cascade,
+  tooth_fdi      text not null check (tooth_fdi ~
+    '^(1[1-8]|2[1-8]|3[1-8]|4[1-8]|5[1-5]|6[1-5]|7[1-5]|8[1-5])$'),
+  tooth_type     text generated always as (
+                   case when left(tooth_fdi, 1) in ('5', '6', '7', '8')
+                     then 'primary' else 'permanent' end
+                 ) stored,
+  condition_code text not null check (condition_code in (
+    'D', 'M', 'F', 'I', 'RF', 'MO', 'Im',
+    'J', 'A', 'AB', 'P', 'In', 'Fx', 'S', 'Rm',
+    'X', 'XO', 'Cm', 'Sp'
+  )),
+  surfaces       text not null default '' check (surfaces ~ '^[BDLMO]{0,5}$'),
+  comment        text,
+  created_at     timestamptz not null default now(),
+  unique (examination_id, tooth_fdi, condition_code)
+);
+
+create index if not exists chart_findings_examination_idx
+  on public.chart_findings (examination_id);
+
+-- Writes the examination and its findings in one transaction. SECURITY INVOKER
+-- (the default) keeps both RLS policies in force; it buys atomicity only.
+-- An appointment id that belongs to another patient is rejected outright.
+create or replace function public.save_chart_examination(
+  p_patient     uuid,
+  p_appointment uuid,
+  p_branch      uuid,
+  p_exam        jsonb,
+  p_findings    jsonb
+) returns uuid
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  new_id uuid;
+  f      jsonb;
+begin
+  if p_appointment is not null and not exists (
+    select 1 from public.appointments a
+    where a.id = p_appointment and a.patient_id = p_patient
+  ) then
+    raise exception 'That appointment does not belong to this patient.'
+      using errcode = '23514';
+  end if;
+
+  insert into public.chart_examinations (
+    patient_id, appointment_id, branch_id,
+    periodontal_screening, occlusion_class, overjet_mm, overbite,
+    midline_deviation, crossbite, appliances, tmd, notes,
+    examined_by, created_by
+  ) values (
+    p_patient, p_appointment, p_branch,
+    nullif(p_exam ->> 'periodontal_screening', ''),
+    nullif(p_exam ->> 'occlusion_class', ''),
+    nullif(p_exam ->> 'overjet_mm', ''),
+    nullif(p_exam ->> 'overbite', ''),
+    coalesce((p_exam ->> 'midline_deviation')::boolean, false),
+    coalesce((p_exam ->> 'crossbite')::boolean, false),
+    coalesce(p_exam -> 'appliances',
+             '{"braces":false,"stayplate":false,"other":null}'::jsonb),
+    coalesce(p_exam -> 'tmd',
+             '{"clenching":false,"clicking":false,"trismus":false,"muscle_spasm":false}'::jsonb),
+    nullif(p_exam ->> 'notes', ''),
+    auth.uid(), auth.uid()
+  ) returning id into new_id;
+
+  for f in select * from jsonb_array_elements(coalesce(p_findings, '[]'::jsonb))
+  loop
+    insert into public.chart_findings (
+      examination_id, tooth_fdi, condition_code, surfaces, comment
+    ) values (
+      new_id,
+      f ->> 'tooth_fdi',
+      f ->> 'condition_code',
+      coalesce(f ->> 'surfaces', ''),
+      nullif(f ->> 'comment', '')
+    );
+  end loop;
+
+  return new_id;
+end;
+$$;
+
+comment on table public.chart_examinations is
+  'One dated dental-chart snapshot per visit; the next visit opens pre-filled from the latest one.';
+comment on table public.chart_findings is
+  'Diagnoses charted on a tooth for one examination. Treatments live in treatment_records.';
+
+-- =====================================================================
 -- CLINIC SETTINGS  (single row)
 -- Business hours drive the appointment grid; consent_template is the default
 -- wording offered when staff record a new consent.
@@ -871,6 +1004,53 @@ create policy "treatments_update_clinical" on public.treatment_records
   with check (public.can_write_clinical() and public.can_access_branch(branch_id));
 drop policy if exists treatments_delete_clinical on public.treatment_records;
 create policy "treatments_delete_clinical" on public.treatment_records
+  for delete using (public.can_write_clinical());
+
+-- dental chart: the whole clinic reads it, only the dentist (or an admin)
+-- charts. A secretary therefore gets a read-only chart.
+alter table public.chart_examinations enable row level security;
+alter table public.chart_findings     enable row level security;
+
+drop policy if exists chart_examinations_select_staff on public.chart_examinations;
+create policy "chart_examinations_select_staff" on public.chart_examinations
+  for select using (public.can_access_branch(branch_id));
+drop policy if exists chart_examinations_insert_clinical on public.chart_examinations;
+create policy "chart_examinations_insert_clinical" on public.chart_examinations
+  for insert with check (public.can_write_clinical() and public.can_access_branch(branch_id));
+drop policy if exists chart_examinations_update_clinical on public.chart_examinations;
+create policy "chart_examinations_update_clinical" on public.chart_examinations
+  for update using (public.can_write_clinical() and public.can_access_branch(branch_id))
+  with check (public.can_write_clinical() and public.can_access_branch(branch_id));
+drop policy if exists chart_examinations_delete_clinical on public.chart_examinations;
+create policy "chart_examinations_delete_clinical" on public.chart_examinations
+  for delete using (public.can_write_clinical());
+
+-- Findings inherit their scope from the parent examination.
+drop policy if exists chart_findings_select_staff on public.chart_findings;
+create policy "chart_findings_select_staff" on public.chart_findings
+  for select using (exists (
+    select 1 from public.chart_examinations e
+    where e.id = examination_id and public.can_access_branch(e.branch_id)
+  ));
+drop policy if exists chart_findings_insert_clinical on public.chart_findings;
+create policy "chart_findings_insert_clinical" on public.chart_findings
+  for insert with check (
+    public.can_write_clinical() and exists (
+      select 1 from public.chart_examinations e
+      where e.id = examination_id and public.can_access_branch(e.branch_id)
+    )
+  );
+drop policy if exists chart_findings_update_clinical on public.chart_findings;
+create policy "chart_findings_update_clinical" on public.chart_findings
+  for update using (public.can_write_clinical())
+  with check (
+    public.can_write_clinical() and exists (
+      select 1 from public.chart_examinations e
+      where e.id = examination_id and public.can_access_branch(e.branch_id)
+    )
+  );
+drop policy if exists chart_findings_delete_clinical on public.chart_findings;
+create policy "chart_findings_delete_clinical" on public.chart_findings
   for delete using (public.can_write_clinical());
 
 -- appointments: both roles manage the schedule, scoped to their branch. The
@@ -1140,6 +1320,11 @@ grant update, delete                      on public.consent_records   to authent
 grant select                              on public.treatment_records to authenticated;
 grant insert, update, delete              on public.treatment_records to authenticated;
 
+grant select                              on public.chart_examinations to authenticated;
+grant insert, update, delete              on public.chart_examinations to authenticated;
+grant select                              on public.chart_findings to authenticated;
+grant insert, update, delete              on public.chart_findings to authenticated;
+
 grant select, insert, update, delete      on public.appointments      to authenticated;
 
 grant select                              on public.clinic_settings   to authenticated;
@@ -1154,6 +1339,10 @@ grant execute on function public.current_role()       to authenticated;
 grant execute on function public.is_admin()           to authenticated;
 grant execute on function public.can_write_clinical() to authenticated;
 grant execute on function public.find_potential_duplicates(text, text, date, integer)
+  to authenticated;
+revoke execute on function public.save_chart_examination(uuid, uuid, uuid, jsonb, jsonb)
+  from public, anon;
+grant execute on function public.save_chart_examination(uuid, uuid, uuid, jsonb, jsonb)
   to authenticated;
 
 -- Branch-scope helpers are called from inside RLS policies, which are evaluated

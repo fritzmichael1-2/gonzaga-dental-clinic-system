@@ -1,6 +1,12 @@
 import "server-only";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { Appointment, PatientIntake, TreatmentRecord } from "@/lib/types";
+import type {
+  Appointment,
+  ChartExamination,
+  ChartFinding,
+  PatientIntake,
+  TreatmentRecord,
+} from "@/lib/types";
 
 /**
  * Typed data-access layer.
@@ -105,6 +111,66 @@ export async function listRecentTreatments(
 
   if (error) throw new Error(`treatments query failed: ${error.message}`);
   return (data ?? []) as TreatmentWithRefs[];
+}
+
+export type ChartExaminationWithRefs = ChartExamination & {
+  findings: ChartFinding[];
+  staff: { id: string; full_name: string }[] | null;
+};
+
+const CHART_SELECT = `
+  id, patient_id, appointment_id, branch_id, periodontal_screening,
+  occlusion_class, overjet_mm, overbite, midline_deviation, crossbite,
+  appliances, tmd, notes, examined_by, examined_at, created_by, created_at,
+  updated_at,
+  staff ( id, full_name )
+`;
+
+/**
+ * Every saved examination for a patient, newest first, with its findings.
+ *
+ * Two round trips rather than one embedded read: `chart_findings` is a
+ * one-to-many child, and PostgREST would return a nested array the hand-written
+ * row types cannot describe without another cast. Grouping in memory also keeps
+ * the preview mock honest, since it only materialises to-one embeds.
+ */
+export async function listChartExaminations(
+  patientId: string
+): Promise<ChartExaminationWithRefs[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("chart_examinations")
+    .select(CHART_SELECT)
+    .eq("patient_id", patientId)
+    .order("examined_at", { ascending: false });
+
+  if (error) throw new Error(`chart query failed: ${error.message}`);
+  const exams = (data ?? []) as Omit<ChartExaminationWithRefs, "findings">[];
+  if (!exams.length) return [];
+
+  const { data: findingRows, error: findingsError } = await supabase
+    .from("chart_findings")
+    .select(
+      "id, examination_id, tooth_fdi, tooth_type, condition_code, surfaces, comment, created_at"
+    )
+    .in(
+      "examination_id",
+      exams.map((e) => e.id)
+    )
+    .order("tooth_fdi");
+
+  if (findingsError) {
+    throw new Error(`chart findings query failed: ${findingsError.message}`);
+  }
+
+  const byExam = new Map<string, ChartFinding[]>();
+  for (const f of (findingRows ?? []) as ChartFinding[]) {
+    const list = byExam.get(f.examination_id) ?? [];
+    list.push(f);
+    byExam.set(f.examination_id, list);
+  }
+
+  return exams.map((e) => ({ ...e, findings: byExam.get(e.id) ?? [] }));
 }
 
 /**

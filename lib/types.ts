@@ -177,6 +177,55 @@ export type TreatmentRecord = {
   updated_at: string;
 };
 
+/** One diagnosed tooth condition inside a chart examination. */
+export type ChartFinding = {
+  id: string;
+  examination_id: string;
+  tooth_fdi: string;
+  /** Derived by the database from the FDI number, not sent by the browser. */
+  tooth_type: "primary" | "permanent";
+  condition_code: string;
+  /** Canonical surface letters (B, M, O, D, L); empty means the whole tooth. */
+  surfaces: string;
+  comment: string | null;
+  created_at: string;
+};
+
+export type ChartAppliances = {
+  braces: boolean;
+  stayplate: boolean;
+  other: string | null;
+};
+
+export type ChartTmd = {
+  clenching: boolean;
+  clicking: boolean;
+  trismus: boolean;
+  muscle_spasm: boolean;
+};
+
+/** One dated dental-chart snapshot, recorded at a visit. */
+export type ChartExamination = {
+  id: string;
+  patient_id: string;
+  appointment_id: string | null;
+  branch_id: string;
+  periodontal_screening: string | null;
+  occlusion_class: string | null;
+  overjet_mm: string | null;
+  overbite: string | null;
+  midline_deviation: boolean;
+  crossbite: boolean;
+  appliances: ChartAppliances;
+  tmd: ChartTmd;
+  notes: string | null;
+  examined_by: string | null;
+  examined_at: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type AppointmentStatus =
   | "requested"
   | "scheduled"

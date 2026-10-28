@@ -79,6 +79,9 @@ const EMBEDS: Record<string, Record<string, { fk: string; target: string }>> = {
     branches: { fk: "branch_id", target: "branches" },
     staff: { fk: "performed_by", target: "staff" },
   },
+  chart_examinations: {
+    staff: { fk: "examined_by", target: "staff" },
+  },
   patients: { branches: { fk: "branch_id", target: "branches" } },
   staff: { branches: { fk: "branch_id", target: "branches" } },
   backup_logs: { staff: { fk: "performed_by", target: "staff" } },
@@ -167,6 +170,7 @@ const BRANCH_SCOPED = new Set([
   "patients",
   "appointments",
   "treatment_records",
+  "chart_examinations",
   "consent_records",
 ]);
 
@@ -459,6 +463,14 @@ export function createPreviewClient() {
         return Promise.resolve({
           data: { ok: false, message: PREVIEW_ERROR },
           error: null,
+        });
+      }
+      if (name === "save_chart_examination") {
+        // Same rule as every other preview write: refuse rather than pretend,
+        // so a reviewer never mistakes a rendered success for a saved chart.
+        return Promise.resolve({
+          data: null,
+          error: { message: PREVIEW_ERROR },
         });
       }
       return Promise.resolve({

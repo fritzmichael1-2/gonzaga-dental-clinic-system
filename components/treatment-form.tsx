@@ -3,9 +3,10 @@
 import { useActionState, useState } from "react";
 import { Save } from "lucide-react";
 import type { ActionState } from "@/app/(app)/patients/actions";
-import type { Branch } from "@/lib/types";
+import type { Appointment, Branch } from "@/lib/types";
 import { SURFACE_LABEL, SURFACES } from "@/lib/clinical/tooth";
 import { clinicTodayKey } from "@/lib/clinical/schedule";
+import { formatDate } from "@/lib/utils";
 import ToothChart from "@/components/tooth-chart";
 
 /**
@@ -20,12 +21,15 @@ export default function TreatmentForm({
   patientId,
   branches,
   defaultBranchId,
+  appointments = [],
   existingCounts = {},
 }: {
   action: (prev: ActionState, formData: FormData) => Promise<ActionState>;
   patientId: string;
   branches: Branch[];
   defaultBranchId: string | null;
+  /** This patient's appointments; the entry is attached to a real visit. */
+  appointments?: (Appointment & { branches: { id: string; name: string }[] | null })[];
   /** Procedures already recorded per tooth, so the chart shows prior work. */
   existingCounts?: Record<string, number>;
 }) {
@@ -189,12 +193,32 @@ export default function TreatmentForm({
           <label className="label" htmlFor="appointment_id">
             Link to appointment
           </label>
-          <input
+          {/*
+            This used to ask for a raw appointment UUID in a text box, so in
+            practice nobody ever linked a treatment to the visit it belonged to.
+            The visit is what "last appointment" means, so it is a dropdown of
+            this patient's real appointments, nearest to today first.
+          */}
+          <select
             id="appointment_id"
             name="appointment_id"
-            placeholder="Optional"
-            className="field font-mono text-xs"
-          />
+            className="field"
+            defaultValue=""
+          >
+            <option value="">Not linked to a booked visit</option>
+            {appointments
+              .slice()
+              .sort(
+                (a, b) =>
+                  new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime()
+              )
+              .map((a) => (
+                <option key={a.id} value={a.id}>
+                  {formatDate(a.starts_at)}
+                  {a.branches?.[0]?.name ? ` · ${a.branches[0].name}` : ""}
+                </option>
+              ))}
+          </select>
         </div>
       </div>
 

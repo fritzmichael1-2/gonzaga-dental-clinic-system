@@ -60,3 +60,107 @@ export function getToothType(fdi: string | number): "primary" | "permanent" {
 export function blankToothSurfaces(): Record<Surface, ConditionCode | null> {
   return { B: null, M: null, O: null, D: null, L: null };
 }
+
+/**
+ * One entry in the chart's editable model: which code is painted on which
+ * surface of each tooth. A tooth may carry several codes, one per surface.
+ */
+export type ToothState = Record<string, Record<Surface, ConditionCode | null>>;
+
+/** Per-tooth free-text note, shown beside the legend. */
+export type ToothComments = Record<string, string>;
+
+/** The `chart_findings` fields the chart reads and writes. */
+export type ChartFindingLike = {
+  tooth_fdi: string;
+  condition_code: string;
+  surfaces: string | null;
+  comment: string | null;
+};
+
+export type ChartFindingDraft = {
+  tooth_fdi: string;
+  condition_code: ConditionCode;
+  /** Canonical order: B, M, O, D, L. */
+  surfaces: Surface[];
+  comment: string;
+};
+
+/**
+ * Paint a saved examination back onto the grid.
+ *
+ * Findings are stored one row per tooth + condition with a surface list; the
+ * grid holds one code per surface. Splitting the list therefore round-trips
+ * exactly for anything the chart itself wrote. A hand-crafted row that put two
+ * conditions on the same surface cannot be represented — the later code wins —
+ * which is the honest ceiling of a one-code-per-surface drawing.
+ */
+export function toothStateFromFindings(
+  findings: ChartFindingLike[]
+): ToothState {
+  const state: ToothState = {};
+  for (const f of findings) {
+    if (!(f.condition_code in CONDITION_CODES)) continue;
+    const code = f.condition_code as ConditionCode;
+    const surfaces = (f.surfaces ?? "").split("").filter(isSurface);
+    // No surface list means the condition applies to the whole tooth (a
+    // missing or impacted tooth, say). Paint every zone rather than inventing
+    // an occlusal finding that was never charted.
+    const target = surfaces.length ? surfaces : [...ZONE_ORDER];
+    const tooth = (state[f.tooth_fdi] ??= blankToothSurfaces());
+    for (const s of target) tooth[s] = code;
+  }
+  return state;
+}
+
+/** Per-tooth comments from the same findings, merged into one note per tooth. */
+export function commentsFromFindings(
+  findings: ChartFindingLike[]
+): ToothComments {
+  const comments: ToothComments = {};
+  for (const f of findings) {
+    const text = f.comment?.trim();
+    if (!text) continue;
+    comments[f.tooth_fdi] = comments[f.tooth_fdi]
+      ? `${comments[f.tooth_fdi]}; ${text}`
+      : text;
+  }
+  return comments;
+}
+
+/** Collapse the grid back into one row per tooth + code, surfaces grouped. */
+export function findingsFromToothState(
+  state: ToothState,
+  comments: ToothComments
+): ChartFindingDraft[] {
+  const out: ChartFindingDraft[] = [];
+  for (const [tooth_fdi, surfaces] of Object.entries(state)) {
+    const byCode = new Map<ConditionCode, Surface[]>();
+    for (const surface of ZONE_ORDER) {
+      const code = surfaces[surface];
+      if (!code) continue;
+      const list = byCode.get(code) ?? [];
+      list.push(surface);
+      byCode.set(code, list);
+    }
+    for (const [condition_code, list] of byCode) {
+      out.push({
+        tooth_fdi,
+        condition_code,
+        surfaces: list,
+        comment: comments[tooth_fdi]?.trim() ?? "",
+      });
+    }
+  }
+  // Stable order so two saves of the same chart produce identical rows.
+  out.sort(
+    (a, b) =>
+      Number(a.tooth_fdi) - Number(b.tooth_fdi) ||
+      a.condition_code.localeCompare(b.condition_code)
+  );
+  return out;
+}
+
+function isSurface(v: string): v is Surface {
+  return (ZONE_ORDER as readonly string[]).includes(v);
+}

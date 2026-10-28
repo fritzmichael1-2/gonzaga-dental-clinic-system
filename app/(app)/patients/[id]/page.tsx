@@ -8,6 +8,7 @@ import {
   getPatientIntake,
   listAppointments,
   listBranches,
+  listChartExaminations,
   listTreatmentsForPatient,
   one,
 } from "@/lib/queries";
@@ -24,13 +25,18 @@ import {
 import type { ConsentRecord } from "@/lib/types";
 import { Callout, Detail, EmptyState, PageHeader } from "@/components/ui";
 import ToothChart from "@/components/tooth-chart";
-import Odontogram from "@/components/odontogram";
+import ChartTab from "@/components/chart-tab";
 import TreatmentForm from "@/components/treatment-form";
 import ConsentForm from "@/components/consent-form";
 import IntakeSummary from "@/components/intake-summary";
 import PatientForm from "@/components/patient-form";
 import PrintButton from "@/components/print-button";
-import { recordConsent, recordTreatment, updatePatient } from "../actions";
+import {
+  recordConsent,
+  recordTreatment,
+  saveChartExamination,
+  updatePatient,
+} from "../actions";
 
 export const metadata = { title: "Patient record" };
 
@@ -53,24 +59,37 @@ export default async function PatientRecordPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ created?: string; tab?: string }>;
+  searchParams: Promise<{
+    created?: string;
+    tab?: string;
+    exam?: string;
+    saved?: string;
+  }>;
 }) {
   const { id } = await params;
-  const { created, tab } = await searchParams;
+  const { created, tab, exam, saved } = await searchParams;
   const session = await requireStaff();
 
   const patient = await getPatient(id);
   if (!patient) notFound();
 
-  const [treatments, appointments, branches, settings, consents, intake] =
-    await Promise.all([
-      listTreatmentsForPatient(id),
-      listAppointments({ patientId: id, limit: 50 }),
-      listBranches(),
-      getClinicSettings(),
-      fetchConsents(id),
-      getPatientIntake(id),
-    ]);
+  const [
+    treatments,
+    appointments,
+    branches,
+    settings,
+    consents,
+    intake,
+    examinations,
+  ] = await Promise.all([
+    listTreatmentsForPatient(id),
+    listAppointments({ patientId: id, limit: 50 }),
+    listBranches(),
+    getClinicSettings(),
+    fetchConsents(id),
+    getPatientIntake(id),
+    listChartExaminations(id),
+  ]);
 
   // Opening a record is itself an access event (Scope 7: audit logging).
   await auditLog({
@@ -261,7 +280,20 @@ export default async function PatientRecordPage({
         </div>
       )}
 
-      {activeTab === "chart" && <Odontogram />}
+      {activeTab === "chart" && (
+        <ChartTab
+          action={saveChartExamination}
+          patientId={id}
+          branches={branches}
+          defaultBranchId={patient.branch_id ?? session.branchId}
+          examinations={examinations}
+          appointments={appointments}
+          treatmentCounts={counts}
+          canWrite={canWrite}
+          initialExamId={exam ?? null}
+          saved={saved === "1"}
+        />
+      )}
 
       {activeTab === "intake" && (
         <>
@@ -348,6 +380,7 @@ export default async function PatientRecordPage({
                 patientId={id}
                 branches={branches}
                 defaultBranchId={session.branchId}
+                appointments={appointments}
                 existingCounts={counts}
               />
             </section>

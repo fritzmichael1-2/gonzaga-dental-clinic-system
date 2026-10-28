@@ -1,5 +1,15 @@
 import "server-only";
 import { z } from "zod";
+import {
+  CONDITION_CODES,
+  FDI_PERMANENT_LOWER,
+  FDI_PERMANENT_UPPER,
+  FDI_PRIMARY_LOWER,
+  FDI_PRIMARY_UPPER,
+  ZONE_ORDER,
+  type ConditionCode,
+  type Surface,
+} from "@/lib/clinical/odontogram";
 
 /**
  * Format-validators only. Enumerating them in one module keeps the intake
@@ -271,6 +281,115 @@ export const treatmentSchema = z.object({
     .optional()
     .or(z.literal("")),
 });
+
+// ---------------------------------------------------------------------
+// Dental record chart (Scope 4)
+//
+// The chart posts one JSON payload rather than two hundred hidden inputs:
+// findings are a list, and a form field per tooth per surface would both
+// bloat the request and lose the tooth/code pairing. Validation still happens
+// here, on the server, so a hand-crafted payload cannot write a tooth that
+// does not exist or a condition the chart never offered.
+// ---------------------------------------------------------------------
+const FDI_TEETH = new Set(
+  [
+    ...FDI_PERMANENT_UPPER,
+    ...FDI_PERMANENT_LOWER,
+    ...FDI_PRIMARY_UPPER,
+    ...FDI_PRIMARY_LOWER,
+  ].map(String)
+);
+
+const CONDITION_CODE_LIST = Object.keys(CONDITION_CODES) as [
+  ConditionCode,
+  ...ConditionCode[],
+];
+
+/** Surfaces arrive in click order; stored canonically as B, M, O, D, L. */
+const toothSurfaces = z
+  .string()
+  .trim()
+  .max(5)
+  .refine((v) => /^[BDLMO]*$/.test(v), "Unknown tooth surface")
+  .refine((v) => new Set(v).size === v.length, "A surface can only be marked once")
+  .transform((v) =>
+    [...v]
+      .sort(
+        (a, b) =>
+          ZONE_ORDER.indexOf(a as Surface) - ZONE_ORDER.indexOf(b as Surface)
+      )
+      .join("")
+  );
+
+export const chartFindingSchema = z.object({
+  tooth_fdi: z
+    .string()
+    .trim()
+    .refine((v) => FDI_TEETH.has(v), "Not a valid FDI tooth number"),
+  condition_code: z.enum(CONDITION_CODE_LIST),
+  surfaces: toothSurfaces.default(""),
+  comment: trimmed(300).optional().nullable(),
+});
+
+export const chartExamFieldsSchema = z.object({
+  periodontal_screening: trimmed(60).optional().nullable(),
+  occlusion_class: trimmed(30).optional().nullable(),
+  overjet_mm: trimmed(10).optional().nullable(),
+  overbite: trimmed(10).optional().nullable(),
+  midline_deviation: z.boolean().default(false),
+  crossbite: z.boolean().default(false),
+  appliances: z
+    .object({
+      braces: z.boolean().default(false),
+      stayplate: z.boolean().default(false),
+      other: trimmed(80).optional().nullable(),
+    })
+    .default({ braces: false, stayplate: false, other: null }),
+  tmd: z
+    .object({
+      clenching: z.boolean().default(false),
+      clicking: z.boolean().default(false),
+      trismus: z.boolean().default(false),
+      muscle_spasm: z.boolean().default(false),
+    })
+    .default({
+      clenching: false,
+      clicking: false,
+      trismus: false,
+      muscle_spasm: false,
+    }),
+  notes: trimmed(2000).optional().nullable(),
+});
+
+export const chartExaminationSchema = z
+  .object({
+    patient_id: z.string().uuid(),
+    branch_id: z.string().uuid(),
+    appointment_id: z.string().uuid().optional().nullable(),
+    exam: chartExamFieldsSchema,
+    findings: z
+      .array(chartFindingSchema)
+      .max(300, "Too many findings for one visit"),
+  })
+  .superRefine((val, ctx) => {
+    // The table's unique constraint would reject this anyway, but with a
+    // database error instead of a sentence a dentist can act on.
+    const seen = new Set<string>();
+    for (const f of val.findings) {
+      const key = `${f.tooth_fdi}:${f.condition_code}`;
+      if (seen.has(key)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["findings"],
+          message: `Tooth ${f.tooth_fdi} lists ${f.condition_code} twice.`,
+        });
+        return;
+      }
+      seen.add(key);
+    }
+  });
+
+export type ChartExaminationInput = z.infer<typeof chartExaminationSchema>;
 
 // ---------------------------------------------------------------------
 // Appointments (Scope 5)

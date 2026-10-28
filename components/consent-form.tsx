@@ -51,11 +51,6 @@ export default function ConsentForm({
   defaultBranchId: string | null;
   template: string;
 }) {
-  const [state, formAction, pending] = useActionState<ActionState, FormData>(
-    action,
-    { ok: true, message: "" },
-  );
-
   const [consentType, setConsentType] = useState<ConsentType>("treatment");
   const [signedByName, setSignedByName] = useState("");
   const [relation, setRelation] = useState("Self");
@@ -73,6 +68,37 @@ export default function ConsentForm({
   const blockInitialed = Boolean(initials && initialedAt);
   const hasSigs = Boolean(patientSig && dentistSig);
   const hasName = signedByName.trim().length >= 2;
+
+  /**
+   * A saved consent must not be saved twice. The pads and fields kept their
+   * values after a successful submit, so a second click — or a double tap on a
+   * tablet — wrote a second, identical consent record. Clearing them here
+   * (rather than in an effect) resets the form in the same pass that reports
+   * success, and the confirmation message stays on screen.
+   */
+  function resetEvidence() {
+    initialsRef.current?.clear();
+    patientRef.current?.clear();
+    dentistRef.current?.clear();
+    setInitials(null);
+    setInitialedAt(null);
+    setPatientSig(null);
+    setDentistSig(null);
+    setSignedByName("");
+    setRelation("Self");
+    setConfirmed(false);
+    setBlockError(false);
+  }
+
+  const [state, formAction, pending] = useActionState<ActionState, FormData>(
+    async (prev, formData) => {
+      const result = await action(prev, formData);
+      if (result?.ok && result.message) resetEvidence();
+      return result;
+    },
+    { ok: true, message: "" },
+  );
+
   const canSubmit = blockInitialed && hasSigs && hasName && confirmed && !pending;
 
   // The clinic's configured wording when it exists, otherwise the clauses

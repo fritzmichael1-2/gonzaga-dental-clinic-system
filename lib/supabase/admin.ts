@@ -7,11 +7,19 @@ import { createClient } from "@supabase/supabase-js";
  * provisioning, audit writes, and the login rate-limit table.
  */
 export function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false, autoRefreshToken: false } }
-  );
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    // Named plainly: the raw SDK error ("supabaseKey is required") gives no
+    // hint about which variable is missing or where it belongs.
+    throw new Error(
+      "Supabase admin client needs NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY " +
+        "(server-only; set them in .env.local and in the deployment environment)."
+    );
+  }
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 }
 
 /** Extract the client IP from the request, handling common proxy headers. */

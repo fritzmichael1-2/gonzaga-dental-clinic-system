@@ -10,6 +10,9 @@ import { isPreviewMode } from "@/lib/preview";
  * date, or treatment detail in `details` — the audit table is a separate
  * exposure surface and should stay free of clinical content.
  */
+/** Warn once per process, not once per audited write. */
+let warnedMissingKey = false;
+
 export async function auditLog(opts: {
   action: string;
   userId?: string | null;
@@ -22,6 +25,22 @@ export async function auditLog(opts: {
   // Preview mode has no database; the insert always fails. Skipping it keeps
   // the browser console clean so real errors stand out during a design review.
   if (isPreviewMode()) return;
+
+  // A missing service-role key used to fail inside the try below, so every
+  // audited action logged the same "supabaseKey is required" stack trace and
+  // the trail silently ran empty — consent recordings included. Say what is
+  // actually wrong, once, instead of burying it in stack traces.
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    if (!warnedMissingKey) {
+      warnedMissingKey = true;
+      console.warn(
+        "[audit] SUPABASE_SERVICE_ROLE_KEY is not set: audit entries are being DROPPED. " +
+          "Add it to .env.local, and to the host's environment (Vercel > Settings > " +
+          "Environment Variables) for every deployment."
+      );
+    }
+    return;
+  }
 
   try {
     await getSupabaseAdmin().from("audit_logs").insert({

@@ -1,9 +1,10 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
-import { Check, PenLine } from "lucide-react";
+import { Check } from "lucide-react";
 import type { ActionState } from "@/app/(app)/patients/actions";
 import type { Branch, ConsentType } from "@/lib/types";
+import SignaturePad, { type SignaturePadHandle } from "@/components/signature-pad";
 
 const CONSENT_TYPES: { value: ConsentType; label: string }[] = [
   { value: "treatment", label: "Treatment consent" },
@@ -49,39 +50,12 @@ export default function ConsentForm({
   const [dentistSig, setDentistSig] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
 
-  const patientCanvasRef = useRef<HTMLCanvasElement>(null);
-  const dentistCanvasRef = useRef<HTMLCanvasElement>(null);
+  const patientCanvasRef = useRef<SignaturePadHandle>(null);
+  const dentistCanvasRef = useRef<SignaturePadHandle>(null);
 
   const allInitialed = CLAUSES.every((_, i) => (initials[i] || "").trim().length > 0);
   const hasSigs = patientSig && dentistSig;
   const canSubmit = allInitialed && hasSigs && confirmed && !pending;
-
-  function startDraw(canvas: HTMLCanvasElement) {
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.lineWidth = 2;
-    ctx.lineCap = "round";
-    ctx.strokeStyle = "#1f2937";
-  }
-
-  function draw(e: React.MouseEvent<HTMLCanvasElement>, canvas: HTMLCanvasElement, setter: (d: string) => void) {
-    const rect = canvas.getBoundingClientRect();
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
-    setter(canvas.toDataURL("image/png"));
-  }
-
-  function clear(canvas: HTMLCanvasElement | null, setter: (d: string | null) => void) {
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    setter(null);
-  }
 
   return (
     <form action={formAction} className="grid gap-5">
@@ -155,9 +129,12 @@ export default function ConsentForm({
                 <input
                   value={initials[i] || ""}
                   onChange={(e) => setInitials({ ...initials, [i]: e.target.value.slice(0, 3).toUpperCase() })}
-                  className="field w-16 text-center uppercase"
+                  /* text-base (16px): anything smaller makes mobile browsers
+                     zoom the page when the field takes focus. */
+                  className="field w-20 text-center text-base uppercase"
                   placeholder="___"
                   maxLength={3}
+                  aria-label={`Initials for clause ${i + 1}`}
                 />
                 <span className="text-xs text-muted">Initials</span>
               </div>
@@ -174,59 +151,39 @@ export default function ConsentForm({
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium">Patient/Guardian Signature</label>
-              <button type="button" onClick={() => clear(patientCanvasRef.current, setPatientSig)} className="btn text-xs">
+              <button
+                type="button"
+                onClick={() => patientCanvasRef.current?.clear()}
+                className="btn text-xs"
+              >
                 Clear
               </button>
             </div>
-            <canvas
+            <SignaturePad
               ref={patientCanvasRef}
-              width={400}
+              label="Patient or guardian signature"
               height={150}
               className="w-full rounded border border-line bg-white"
-              onMouseDown={(e) => {
-                const ctx = patientCanvasRef.current?.getContext("2d");
-                if (ctx) {
-                  ctx.beginPath();
-                  ctx.moveTo(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
-                }
-              }}
-              onMouseMove={(e) => {
-                if (e.buttons !== 1 || !patientCanvasRef.current) return;
-                draw(e, patientCanvasRef.current, setPatientSig);
-              }}
-              onMouseUp={() => {
-                const ctx = patientCanvasRef.current?.getContext("2d");
-                if (ctx) ctx.beginPath();
-              }}
+              onChange={setPatientSig}
             />
           </div>
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium">Dentist Signature</label>
-              <button type="button" onClick={() => clear(dentistCanvasRef.current, setDentistSig)} className="btn text-xs">
+              <button
+                type="button"
+                onClick={() => dentistCanvasRef.current?.clear()}
+                className="btn text-xs"
+              >
                 Clear
               </button>
             </div>
-            <canvas
+            <SignaturePad
               ref={dentistCanvasRef}
-              width={400}
+              label="Dentist signature"
               height={150}
               className="w-full rounded border border-line bg-white"
-              onMouseDown={(e) => {
-                const ctx = dentistCanvasRef.current?.getContext("2d");
-                if (ctx) {
-                  ctx.beginPath();
-                  ctx.moveTo(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
-                }
-              }}
-              onMouseMove={(e) => {
-                if (e.buttons !== 1 || !dentistCanvasRef.current) return;
-                draw(e, dentistCanvasRef.current, setDentistSig);
-              }}
-              onMouseUp={() => {
-                const ctx = dentistCanvasRef.current?.getContext("2d");
-                if (ctx) ctx.beginPath();
-              }}
+              onChange={setDentistSig}
             />
           </div>
         </div>

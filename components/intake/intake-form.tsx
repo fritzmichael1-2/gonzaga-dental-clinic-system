@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useActionState, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Eraser, Save } from "lucide-react";
 import type { ActionState } from "@/app/(app)/patients/actions";
 import type { Branch } from "@/lib/types";
+import SignaturePad, { type SignaturePadHandle } from "@/components/signature-pad";
 import s from "./intake-form.module.css";
 
 type YesNo = "yes" | "no" | null;
@@ -258,8 +259,8 @@ export default function PatientIntakeForm({
 
   const [signature, setSignature] = useState<string | null>(null);
   const [sigError, setSigError] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const drawing = useRef(false);
+  const padRef = useRef<SignaturePadHandle>(null);
+  const sigAnchorRef = useRef<HTMLDivElement>(null);
 
   const age = useMemo(() => {
     if (!birthdate) return "";
@@ -277,76 +278,13 @@ export default function PatientIntakeForm({
   const errors = (state && !state.ok ? state.fieldErrors : undefined) ?? {};
   const submitLabel = "Register patient";
 
-  // ---------------------------------------------------------------
-  // Signature pad
-  // ---------------------------------------------------------------
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = Math.max(1, Math.round(rect.width * dpr));
-    canvas.height = Math.max(1, Math.round(rect.height * dpr));
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.lineWidth = 2;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = "#1f2937";
-  }, []);
-
-  function pointAt(e: React.PointerEvent<HTMLCanvasElement>) {
-    const rect = e.currentTarget.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-  }
-
-  function handleDown(e: React.PointerEvent<HTMLCanvasElement>) {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
-    e.preventDefault();
-    canvas.setPointerCapture(e.pointerId);
-    drawing.current = true;
-    setSigError(false);
-    const p = pointAt(e);
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-  }
-
-  function handleMove(e: React.PointerEvent<HTMLCanvasElement>) {
-    if (!drawing.current) return;
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
-    const p = pointAt(e);
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-  }
-
-  function handleUp() {
-    if (!drawing.current) return;
-    drawing.current = false;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    setSignature(canvas.toDataURL("image/png"));
-  }
-
-  function clearSignature() {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    setSignature(null);
-  }
-
   // The patient must sign before the record is created, matching the paper
   // form where the signature block is mandatory.
   function guardSubmit(e: React.FormEvent<HTMLFormElement>) {
     if (!signature) {
       e.preventDefault();
       setSigError(true);
-      canvasRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      sigAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }
 
@@ -949,20 +887,23 @@ export default function PatientIntakeForm({
           <h2>Patient / guardian signature</h2>
         </div>
         <div className={s.cardBody}>
-          <div className={`${s.sigWrap} ${sigError ? s.sigWrapErr : ""}`}>
-            <canvas
-              ref={canvasRef}
+          <div
+            ref={sigAnchorRef}
+            className={`${s.sigWrap} ${sigError ? s.sigWrapErr : ""}`}
+          >
+            <SignaturePad
+              ref={padRef}
               className={s.sig}
-              onPointerDown={handleDown}
-              onPointerMove={handleMove}
-              onPointerUp={handleUp}
-              onPointerCancel={handleUp}
-              onPointerLeave={handleUp}
-              aria-label="Patient signature"
+              height={170}
+              label="Patient signature"
+              onChange={(dataUrl) => {
+                setSignature(dataUrl);
+                if (dataUrl) setSigError(false);
+              }}
             />
           </div>
           <div className={s.sigFoot}>
-            <button type="button" onClick={clearSignature} className="btn-ghost">
+            <button type="button" onClick={() => padRef.current?.clear()} className="btn-ghost">
               <Eraser size={14} aria-hidden />
               Clear canvas
             </button>

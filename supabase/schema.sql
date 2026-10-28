@@ -441,14 +441,40 @@ create table if not exists public.consent_records (
   version           text not null default '1.0',
   body              text not null,
   -- TODO(CLINIC): confirm the exact consent wording and the version scheme.
-  -- Signature capture (drawn signature vs typed name) is UNDECIDED in the
-  -- plan; signed_by_name below is the typed-name minimum.
+  -- Signature capture is decided: the sheet is drawn on-screen, so the typed
+  -- name below is the identity claim and the PNGs are the mark itself.
   signed_by_name    text not null,
   signed_by_relation text,
   signed_at         timestamptz not null default now(),
   branch_id         uuid not null references public.branches(id) on delete restrict,
   recorded_by       uuid references auth.users(id) on delete set null,
-  created_at        timestamptz not null default now()
+  created_at        timestamptz not null default now(),
+
+  -- E-signature evidence. Nullable because records made before the pads
+  -- existed carry only the typed name.
+  signature_patient_png text
+                    check (signature_patient_png is null
+                           or length(signature_patient_png) <= 1000000),
+  signature_dentist_png text
+                    check (signature_dentist_png is null
+                           or length(signature_dentist_png) <= 1000000),
+  -- One mark for the whole clause list, plus when it was made and how many
+  -- clauses it covered. Never ten copies of the signature: the record says
+  -- "initialled as a block" rather than inventing ten acknowledgements.
+  initials_png      text
+                    check (initials_png is null or length(initials_png) <= 300000),
+  initialed_all_at  timestamptz,
+  initialed_clause_count smallint,
+  consent_meta      jsonb,
+
+  -- The patient and the dentist sign the same sheet.
+  constraint consent_signatures_paired check (
+    (signature_patient_png is null) = (signature_dentist_png is null)
+  ),
+  -- An initials image with no time, or a time with no image, is a bug.
+  constraint consent_initials_paired check (
+    (initials_png is null) = (initialed_all_at is null)
+  )
 );
 
 create index if not exists consent_patient_idx on public.consent_records (patient_id, signed_at desc);

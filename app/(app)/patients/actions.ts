@@ -419,6 +419,11 @@ export async function recordConsent(
     signed_by_name: String(formData.get("signed_by_name") ?? ""),
     signed_by_relation: String(formData.get("signed_by_relation") ?? ""),
     branch_id: String(formData.get("branch_id") ?? ""),
+    signature_patient_png: String(formData.get("signature_patient_png") ?? ""),
+    signature_dentist_png: String(formData.get("signature_dentist_png") ?? ""),
+    initials_png: String(formData.get("initials_png") ?? ""),
+    initialed_clause_count: String(formData.get("initialed_clause_count") ?? ""),
+    consent_meta: String(formData.get("consent_meta") ?? ""),
   });
 
   if (!parsed.success) {
@@ -430,6 +435,19 @@ export async function recordConsent(
   }
   const c = parsed.data;
 
+  const hasSignatures = Boolean(c.signature_patient_png);
+  const hasInitials = Boolean(c.initials_png);
+
+  const meta = (() => {
+    if (!c.consent_meta) return null;
+    try {
+      return JSON.parse(c.consent_meta) as Record<string, unknown>;
+    } catch {
+      // A malformed snapshot is not worth losing the consent over.
+      return { raw: c.consent_meta };
+    }
+  })();
+
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.from("consent_records").insert({
     patient_id: c.patient_id,
@@ -440,6 +458,14 @@ export async function recordConsent(
     signed_by_relation: nullable(c.signed_by_relation),
     branch_id: c.branch_id,
     recorded_by: session.userId,
+    signature_patient_png: nullable(c.signature_patient_png),
+    signature_dentist_png: nullable(c.signature_dentist_png),
+    initials_png: nullable(c.initials_png),
+    // Stamped here rather than trusted from the browser: the paired constraint
+    // needs a server-side time, and `consent_meta` keeps the client clock.
+    initialed_all_at: hasInitials ? new Date().toISOString() : null,
+    initialed_clause_count: hasInitials ? c.initialed_clause_count ?? null : null,
+    consent_meta: meta,
   });
 
   if (error) return { ok: false, message: `Could not save: ${error.message}` };
@@ -450,7 +476,13 @@ export async function recordConsent(
     email: session.email,
     entityType: "consent",
     entityId: c.patient_id,
-    details: { consent_type: c.consent_type, version: c.version },
+    details: {
+      consent_type: c.consent_type,
+      version: c.version,
+      signatures: hasSignatures,
+      block_initialled: hasInitials,
+      clause_count: c.initialed_clause_count ?? null,
+    },
   });
 
   revalidatePath(`/patients/${c.patient_id}`);

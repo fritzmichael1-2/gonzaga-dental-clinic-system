@@ -388,6 +388,59 @@ export default async function PatientRecordPage({
                     <p className="mt-2 rounded-lg bg-surface-2 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
                       {c.body}
                     </p>
+
+                    {/* E-signature evidence. Records made before the pads
+                        existed carry only the typed name, so this block only
+                        appears when there is something to show. */}
+                    {(c.initials_png ||
+                      c.signature_patient_png ||
+                      c.signature_dentist_png) && (
+                      <div className="mt-3 flex flex-wrap items-end gap-4">
+                        {c.initials_png && (
+                          <figure className="flex flex-col gap-1">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={c.initials_png}
+                              alt={`Initials of ${c.signed_by_name}`}
+                              className="h-12 w-auto rounded border border-line bg-white"
+                            />
+                            <figcaption className="text-[11px] text-muted">
+                              Initialled all {c.initialed_clause_count ?? "—"}{" "}
+                              clauses
+                              {c.initialed_all_at
+                                ? ` · ${formatDate(c.initialed_all_at)}`
+                                : ""}
+                            </figcaption>
+                          </figure>
+                        )}
+                        {c.signature_patient_png && (
+                          <figure className="flex flex-col gap-1">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={c.signature_patient_png}
+                              alt={`Signature of ${c.signed_by_name}`}
+                              className="h-12 w-auto rounded border border-line bg-white"
+                            />
+                            <figcaption className="text-[11px] text-muted">
+                              Patient / guardian
+                            </figcaption>
+                          </figure>
+                        )}
+                        {c.signature_dentist_png && (
+                          <figure className="flex flex-col gap-1">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={c.signature_dentist_png}
+                              alt="Dentist countersignature"
+                              className="h-12 w-auto rounded border border-line bg-white"
+                            />
+                            <figcaption className="text-[11px] text-muted">
+                              Dentist
+                            </figcaption>
+                          </figure>
+                        )}
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>

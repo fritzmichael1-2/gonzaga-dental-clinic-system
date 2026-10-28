@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
-import { Check } from "lucide-react";
+import { Check, Eraser, PenLine } from "lucide-react";
 import type { ActionState } from "@/app/(app)/patients/actions";
 import type { Branch, ConsentType } from "@/lib/types";
 import SignaturePad, { type SignaturePadHandle } from "@/components/signature-pad";
@@ -27,6 +27,17 @@ const CLAUSES = [
   "I voluntarily give my informed consent to proceed with the treatment described.",
 ];
 
+const RELATIONS = ["Self", "Parent", "Guardian", "Spouse", "Other"];
+
+/**
+ * Digital consent — the paper form's clauses, initialled once and signed twice.
+ *
+ * Why one initial instead of ten: the paper sheet has an "Initial:" line under
+ * each clause, but copying a signature into all ten would make the record claim
+ * ten separate acknowledgements that never happened. The patient initials once,
+ * presses "Initial all 10 clauses", and the record stores that mark with the
+ * clause count and the moment it was made — readable as "initialled as a block".
+ */
 export default function ConsentForm({
   action,
   patientId,
@@ -44,38 +55,98 @@ export default function ConsentForm({
     action,
     { ok: true, message: "" },
   );
+
   const [consentType, setConsentType] = useState<ConsentType>("treatment");
-  const [initials, setInitials] = useState<Record<number, string>>({});
+  const [signedByName, setSignedByName] = useState("");
+  const [relation, setRelation] = useState("Self");
+  const [initials, setInitials] = useState<string | null>(null);
+  const [initialedAt, setInitialedAt] = useState<Date | null>(null);
   const [patientSig, setPatientSig] = useState<string | null>(null);
   const [dentistSig, setDentistSig] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [blockError, setBlockError] = useState(false);
 
-  const patientCanvasRef = useRef<SignaturePadHandle>(null);
-  const dentistCanvasRef = useRef<SignaturePadHandle>(null);
+  const initialsRef = useRef<SignaturePadHandle>(null);
+  const patientRef = useRef<SignaturePadHandle>(null);
+  const dentistRef = useRef<SignaturePadHandle>(null);
 
-  const allInitialed = CLAUSES.every((_, i) => (initials[i] || "").trim().length > 0);
-  const hasSigs = patientSig && dentistSig;
-  const canSubmit = allInitialed && hasSigs && confirmed && !pending;
+  const blockInitialed = Boolean(initials && initialedAt);
+  const hasSigs = Boolean(patientSig && dentistSig);
+  const hasName = signedByName.trim().length >= 2;
+  const canSubmit = blockInitialed && hasSigs && hasName && confirmed && !pending;
+
+  // The clinic's configured wording when it exists, otherwise the clauses
+  // actually shown above — so the stored record is never blank.
+  const body = template.trim().length >= 20 ? template.trim() : CLAUSES.join(" ");
+
+  function initialAll() {
+    if (!initials) {
+      setBlockError(true);
+      return;
+    }
+    setBlockError(false);
+    setInitialedAt(new Date());
+  }
+
+  function clearInitials() {
+    initialsRef.current?.clear();
+    // The mark is the evidence, so dropping it drops the block acknowledgement.
+    setInitialedAt(null);
+  }
+
+  const missing = [
+    !blockInitialed && "initial the clause list",
+    !hasSigs && "both signatures",
+    !hasName && "the signer's name",
+    !confirmed && "the confirmation box",
+  ].filter(Boolean);
 
   return (
     <form action={formAction} className="grid gap-5">
       <input type="hidden" name="patient_id" value={patientId} />
       <input type="hidden" name="consent_type" value={consentType} />
-      <input type="hidden" name="template" value={template} />
-      {patientSig && <input type="hidden" name="signature_patient" value={patientSig} />}
-      {dentistSig && <input type="hidden" name="signature_dentist" value={dentistSig} />}
-      <input type="hidden" name="initialed_clauses" value={JSON.stringify(initials)} />
-      <input type="hidden" name="consent_meta" value={JSON.stringify({
-        date: new Date().toISOString(),
-        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : null,
-      })} />
+      <input type="hidden" name="version" value="1.0" />
+      <input type="hidden" name="body" value={body} />
+      <input type="hidden" name="signed_by_name" value={signedByName.trim()} />
+      <input
+        type="hidden"
+        name="signed_by_relation"
+        value={relation === "Self" ? "" : relation}
+      />
+      {patientSig && <input type="hidden" name="signature_patient_png" value={patientSig} />}
+      {dentistSig && <input type="hidden" name="signature_dentist_png" value={dentistSig} />}
+      {blockInitialed && (
+        <>
+          <input type="hidden" name="initials_png" value={initials ?? ""} />
+          <input
+            type="hidden"
+            name="initialed_clause_count"
+            value={String(CLAUSES.length)}
+          />
+        </>
+      )}
+      <input
+        type="hidden"
+        name="consent_meta"
+        value={JSON.stringify({
+          // Client clock; the server stamps the authoritative initialed_all_at.
+          initialed_at: initialedAt?.toISOString() ?? null,
+          clause_count: CLAUSES.length,
+          signed_by_relation: relation,
+          userAgent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+        })}
+      />
 
+      {/* ============================================================
+          Details
+          ============================================================ */}
       <section className="panel">
         <div className="panel-header">
-          <h2 className="panel-title">Informed Consent</h2>
+          <h2 className="panel-title">Informed consent</h2>
+          <p className="hint">Version 1.0 · wording is stored with the record</p>
         </div>
         <div className="panel-body grid gap-4">
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium" htmlFor="consent-branch">
                 Branch
@@ -95,72 +166,171 @@ export default function ConsentForm({
               </select>
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">Consent type</label>
-              <div className="flex flex-wrap gap-2">
-                {CONSENT_TYPES.map((type) => (
-                  <button
-                    key={type.value}
-                    type="button"
-                    onClick={() => setConsentType(type.value)}
-                    className={`btn text-sm ${
-                      consentType === type.value ? "border-brand text-brand" : ""
-                    }`}
-                  >
-                    {type.label}
-                  </button>
+              <label className="text-sm font-medium" htmlFor="consent-name">
+                Signed by <span className="text-danger">*</span>
+              </label>
+              <input
+                id="consent-name"
+                className="field"
+                value={signedByName}
+                onChange={(e) => setSignedByName(e.target.value)}
+                placeholder="Full name of the patient / guardian"
+                autoComplete="off"
+              />
+              {signedByName.length > 0 && !hasName && (
+                <p className="error-text">Enter the full name.</p>
+              )}
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium" htmlFor="consent-relation">
+                In what capacity
+              </label>
+              <select
+                id="consent-relation"
+                className="field"
+                value={relation}
+                onChange={(e) => setRelation(e.target.value)}
+              >
+                {RELATIONS.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
                 ))}
-              </div>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-medium">Consent type</span>
+            <div className="flex flex-wrap gap-2">
+              {CONSENT_TYPES.map((type) => (
+                <button
+                  key={type.value}
+                  type="button"
+                  onClick={() => setConsentType(type.value)}
+                  aria-pressed={consentType === type.value}
+                  className={`btn text-sm ${
+                    consentType === type.value ? "border-brand text-brand" : ""
+                  }`}
+                >
+                  {type.label}
+                </button>
+              ))}
             </div>
           </div>
         </div>
       </section>
 
+      {/* ============================================================
+          Clauses + one block initial
+          ============================================================ */}
       <section className="panel">
         <div className="panel-header">
-          <h2 className="panel-title">Clauses</h2>
-          <p className="hint">Initial each clause to indicate you have read and understood it.</p>
+          <h2 className="panel-title">Clauses ({CLAUSES.length})</h2>
+          <p className="hint">
+            Read the list, then initial once to cover every clause.
+          </p>
         </div>
-        <div className="panel-body divide-y divide-line">
-          {CLAUSES.map((clause, i) => (
-            <div key={i} className="flex items-start gap-4 py-4 first:pt-0 last:pb-0">
-              <span className="mt-1 text-sm font-semibold text-muted">{i + 1}.</span>
-              <p className="flex-1 text-sm leading-relaxed">{clause}</p>
-              <div className="flex flex-col items-center gap-1">
-                <input
-                  value={initials[i] || ""}
-                  onChange={(e) => setInitials({ ...initials, [i]: e.target.value.slice(0, 3).toUpperCase() })}
-                  /* text-base (16px): anything smaller makes mobile browsers
-                     zoom the page when the field takes focus. */
-                  className="field w-20 text-center text-base uppercase"
-                  placeholder="___"
-                  maxLength={3}
-                  aria-label={`Initials for clause ${i + 1}`}
-                />
-                <span className="text-xs text-muted">Initials</span>
+        <div className="panel-body flex flex-col gap-5">
+          <ol className="flex flex-col divide-y divide-line">
+            {CLAUSES.map((clause, i) => (
+              <li key={i} className="flex items-start gap-4 py-3 first:pt-0 last:pb-0">
+                <span className="mt-0.5 text-sm font-semibold text-muted">
+                  {i + 1}.
+                </span>
+                <p className="flex-1 text-sm leading-relaxed">{clause}</p>
+              </li>
+            ))}
+          </ol>
+
+          <div className="rounded-xl border border-line bg-surface-2 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">Patient initials</p>
+                <p className="hint">
+                  Draw your initials once. They cover all {CLAUSES.length}{" "}
+                  clauses above, and the record says so.
+                </p>
               </div>
+              <span
+                className={blockInitialed ? "badge-ok" : "badge-warn"}
+                aria-live="polite"
+              >
+                {blockInitialed
+                  ? `Initialled as a block at ${initialedAt?.toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}`
+                  : "Not initialled"}
+              </span>
             </div>
-          ))}
+
+            <div
+              className={`mt-3 max-w-md rounded-lg border border-dashed bg-white p-1 ${
+                blockError ? "border-danger" : "border-line-strong"
+              }`}
+            >
+              <SignaturePad
+                ref={initialsRef}
+                label="Patient initials"
+                height={110}
+                className="block w-full rounded bg-white"
+                onChange={(dataUrl) => {
+                  setInitials(dataUrl);
+                  if (!dataUrl) setInitialedAt(null);
+                  if (dataUrl) setBlockError(false);
+                }}
+              />
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={initialAll}
+                disabled={!initials || blockInitialed}
+                className="btn-secondary"
+              >
+                <PenLine size={15} aria-hidden />
+                {blockInitialed
+                  ? `Initialled all ${CLAUSES.length} clauses`
+                  : `Initial all ${CLAUSES.length} clauses`}
+              </button>
+              <button type="button" onClick={clearInitials} className="btn-ghost">
+                <Eraser size={15} aria-hidden />
+                Clear initials
+              </button>
+              {blockError && (
+                <p className="error-text">Draw your initials first.</p>
+              )}
+            </div>
+          </div>
         </div>
       </section>
 
+      {/* ============================================================
+          Signatures
+          ============================================================ */}
       <section className="panel">
         <div className="panel-header">
-          <h2 className="panel-title">Signatures</h2>
+          <h2 className="panel-title">E-signatures</h2>
+          <p className="hint">Both required</p>
         </div>
         <div className="panel-body grid gap-4 md:grid-cols-2">
           <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Patient/Guardian Signature</label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-sm font-medium">
+                Patient / guardian signature
+              </label>
               <button
                 type="button"
-                onClick={() => patientCanvasRef.current?.clear()}
+                onClick={() => patientRef.current?.clear()}
                 className="btn text-xs"
               >
                 Clear
               </button>
             </div>
             <SignaturePad
-              ref={patientCanvasRef}
+              ref={patientRef}
               label="Patient or guardian signature"
               height={150}
               className="w-full rounded border border-line bg-white"
@@ -168,18 +338,18 @@ export default function ConsentForm({
             />
           </div>
           <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Dentist Signature</label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-sm font-medium">Dentist signature</label>
               <button
                 type="button"
-                onClick={() => dentistCanvasRef.current?.clear()}
+                onClick={() => dentistRef.current?.clear()}
                 className="btn text-xs"
               >
                 Clear
               </button>
             </div>
             <SignaturePad
-              ref={dentistCanvasRef}
+              ref={dentistRef}
               label="Dentist signature"
               height={150}
               className="w-full rounded border border-line bg-white"
@@ -189,6 +359,9 @@ export default function ConsentForm({
         </div>
       </section>
 
+      {/* ============================================================
+          Confirm
+          ============================================================ */}
       <section className="panel">
         <div className="panel-body flex flex-col gap-4">
           <label className="flex items-start gap-3">
@@ -196,25 +369,27 @@ export default function ConsentForm({
               type="checkbox"
               checked={confirmed}
               onChange={(e) => setConfirmed(e.target.checked)}
-              className="mt-1 rounded border-line"
+              className="mt-1 size-4 rounded border-line"
             />
             <span className="text-sm">
-              I confirm that I have read and understood all clauses, initialed each, and provided signatures. I voluntarily give informed consent.
+              I confirm that I have read and understood all {CLAUSES.length}{" "}
+              clauses, that the initials and signatures on this record are mine,
+              and I voluntarily give informed consent.
             </span>
           </label>
-          <div className="flex items-center justify-between">
-            <p className="hint">
-              {!allInitialed && "Initial all clauses. "}
-              {!hasSigs && "Provide both signatures. "}
-              {!confirmed && "Check the confirmation box."}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="hint" aria-live="polite">
+              {missing.length
+                ? `Still needed: ${missing.join(" · ")}.`
+                : "Ready to record."}
             </p>
-            <button type="submit" className="btn btn-primary" disabled={!canSubmit}>
-              <Check className="h-4 w-4" />
-              Confirm & accept
+            <button type="submit" className="btn-primary" disabled={!canSubmit}>
+              <Check className="h-4 w-4" aria-hidden />
+              Confirm &amp; accept
             </button>
           </div>
           {state?.message && (
-            <p className={`text-sm ${state.ok ? "text-emerald-700" : "text-danger"}`}>
+            <p className={`text-sm ${state.ok ? "text-ok" : "text-danger"}`}>
               {state.message}
             </p>
           )}

@@ -148,6 +148,14 @@ export type ConsentRecord = {
   branch_id: string;
   recorded_by: string | null;
   created_at: string;
+  /** Drawn on the tablet; null on records made before the pads existed. */
+  signature_patient_png: string | null;
+  signature_dentist_png: string | null;
+  /** One mark covering the whole clause list, not one per clause. */
+  initials_png: string | null;
+  initialed_all_at: string | null;
+  initialed_clause_count: number | null;
+  consent_meta: Record<string, unknown> | null;
 };
 
 export type TreatmentRecord = {

@@ -200,6 +200,17 @@ export type IntakeInput = z.infer<typeof intakeSchema>;
 // ---------------------------------------------------------------------
 // Consent (Scope 3)
 // ---------------------------------------------------------------------
+/** A PNG data URL drawn on the tablet, or absent — never an arbitrary string. */
+const pngDataUrl = (max: number, label: string) =>
+  z
+    .string()
+    .max(max, `${label} image is too large`)
+    .refine(
+      (v) => v === "" || v.startsWith("data:image/png;base64,"),
+      `${label} must be a PNG image`
+    )
+    .optional();
+
 export const consentSchema = z.object({
   patient_id: z.string().uuid(),
   consent_type: z.enum(["treatment", "privacy", "surgery", "orthodontic", "other"]),
@@ -208,6 +219,23 @@ export const consentSchema = z.object({
   signed_by_name: namesSchema,
   signed_by_relation: trimmed(60).optional().nullable(),
   branch_id: z.string().uuid(),
+
+  // E-signature evidence, captured with components/signature-pad.tsx.
+  signature_patient_png: pngDataUrl(1_000_000, "Patient signature"),
+  signature_dentist_png: pngDataUrl(1_000_000, "Dentist signature"),
+  // One mark for the whole clause list — see the migration comment: ten copies
+  // of one signature would claim ten acknowledgements that never happened.
+  initials_png: pngDataUrl(300_000, "Initials"),
+  initialed_clause_count: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(100)
+    .optional()
+    .nullable(),
+
+  // Browser/device context, stored verbatim for the audit trail.
+  consent_meta: trimmed(2_000).optional().nullable(),
 });
 
 // ---------------------------------------------------------------------

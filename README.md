@@ -46,7 +46,10 @@ The answers are stored in two places on purpose:
 `patient_intake.filled_by` and `patient_intake.signed_at` are separate columns
 because they are two different people: the secretary encodes the form, the
 patient (or guardian) signs it. A row is constrained so a signature is either
-complete — image and timestamp — or absent, never half of one.
+complete — image and timestamp — or absent, never half of one. Because the
+paper form's signature block is mandatory, `createPatient` also refuses a
+submission with no signature, so posting the form directly cannot register a
+patient without one.
 
 The structured blocks are `jsonb`. They mirror the printed form exactly and are
 read as a block, so a column per checkbox would only add migration work;

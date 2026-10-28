@@ -278,6 +278,11 @@ export default function PatientIntakeForm({
   const errors = (state && !state.ok ? state.fieldErrors : undefined) ?? {};
   const submitLabel = "Register patient";
 
+  // The client guard catches the common case, but the server refuses an
+  // unsigned intake as well; reflect that refusal on the signature block
+  // rather than only in the banner at the top of the form.
+  const signatureError = sigError || Boolean(errors.signature_png);
+
   // The patient must sign before the record is created, matching the paper
   // form where the signature block is mandatory.
   function guardSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -889,7 +894,7 @@ export default function PatientIntakeForm({
         <div className={s.cardBody}>
           <div
             ref={sigAnchorRef}
-            className={`${s.sigWrap} ${sigError ? s.sigWrapErr : ""}`}
+            className={`${s.sigWrap} ${signatureError ? s.sigWrapErr : ""}`}
           >
             <SignaturePad
               ref={padRef}
@@ -911,7 +916,7 @@ export default function PatientIntakeForm({
               Sign with a finger, stylus, or mouse. The signature is required
               before the record is created.
             </p>
-            {sigError && <span className={s.sigErr}>A signature is required.</span>}
+            {signatureError && <span className={s.sigErr}>A signature is required.</span>}
             {signature && <span className={s.sigOk}>Signature captured.</span>}
           </div>
           <p className={`${s.hint} mt-2`}>

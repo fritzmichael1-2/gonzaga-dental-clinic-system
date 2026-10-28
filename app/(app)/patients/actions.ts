@@ -127,6 +127,19 @@ export async function createPatient(
   const p = parsed.data;
   const i = parsedIntake.data;
 
+  // The signature block on the paper form is mandatory, so the server enforces
+  // it too. The client refuses to submit without a signature, but that guard is
+  // convenience only — a direct request would otherwise create a patient whose
+  // intake has `signed_at` null. The table constraint pairs the image and the
+  // timestamp; it does not require either, so the check belongs here.
+  if (!i.signature_png) {
+    return {
+      ok: false,
+      message: "The patient must sign the intake form before the record is saved.",
+      fieldErrors: { signature_png: "A signature is required." },
+    };
+  }
+
   // The duplicate guard: the plan lists duplicate records as a real risk, so
   // a staff member explicitly confirms instead of silently creating a second
   // file for the same person.

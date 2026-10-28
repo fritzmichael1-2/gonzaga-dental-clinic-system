@@ -133,44 +133,48 @@ npm run start
 
 ## Deployment
 
-### Deploying to Vercel (Recommended)
+### Deploying to Vercel
 
-Vercel has excellent Next.js support and is the easiest deployment option.
+Vercel auto-detects everything about this app; the only manual step is the
+environment variables.
 
-1. **Push to GitHub**
-   ```bash
-   git add .
-   git commit -m "Prepare for deployment"
-   git push origin main
-   ```
+1. **Push to GitHub** (already the case — `main` is the deploy branch)
+2. **Import the repository**
+   - [vercel.com](https://vercel.com) → **New Project** → import
+     `fritzmichael1-2/gonzaga-dental-clinic-system`
+   - Framework preset: Next.js (detected), build `npm run build`, no output dir
+3. **Environment variables** (Project → Settings → Environment Variables), for
+   Production and Preview:
 
-2. **Import to Vercel**
-   - Go to [vercel.com](https://vercel.com) and sign in
-   - Click "New Project" → Import your GitHub repository
-   - Vercel will auto-detect Next.js settings
+   | Variable | Value |
+   | --- | --- |
+   | `NEXT_PUBLIC_SUPABASE_URL` | `https://<project-ref>.supabase.co` |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Publishable/anon key |
+   | `SUPABASE_SERVICE_ROLE_KEY` | Server-only; admin and backup screens need it |
+   | `GDCMAS_PREVIEW` | **Do not set it.** `1` fakes a signed-in identity and skips `cookies()` |
 
-3. **Configure environment variables**
-   - In Vercel project settings → Environment Variables
-   - Add all variables from `.env.local`:
-     - `NEXT_PUBLIC_SUPABASE_URL`
-     - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-     - `SUPABASE_SERVICE_ROLE_KEY`
-     - `GDCMAS_PREVIEW=0`
+4. **Deploy** — every push to `main` then redeploys automatically.
 
-4. **Deploy**
-   - Click "Deploy"
-   - Vercel will build and deploy your application
-   - You'll receive a production URL
+> **Note on the existing project.** `gonzaga-dental-clinic-system.vercel.app`
+> lives under a different Vercel account and is currently blocked behind a paid
+> plan, so that URL serves an old build with no intake form. Creating a new
+> project from the same repository (step 2) costs nothing on Hobby.
 
-### Deploying to other platforms
+### Other hosts
 
-This is a standard Next.js 16 app and can be deployed to any platform that supports Node.js:
-- [Netlify](https://www.netlify.com/)
-- [Railway](https://railway.app/)
-- [Render](https://render.com/)
+Any platform that runs Next.js 16 on Node works, with the same variables:
+
+- [Netlify](https://www.netlify.com/) — free tier, Next.js runtime
+- [Cloudflare Pages](https://pages.cloudflare.com/) — free tier, via the Next adapter
+- [Railway](https://railway.app/) / [Render](https://render.com/) — paid beyond the trial
 - Self-hosted with Docker or PM2
 
-Ensure all environment variables are configured in your hosting platform.
+### Checking the build before deploying
+
+```bash
+npm run build     # must pass; the deploy runs the same command
+npm run start     # http://localhost:3000, same build with the same env
+```
 
 ## Post-Deployment Checklist
 

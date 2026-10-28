@@ -20,15 +20,22 @@ export default function TreatmentLedger({
   canEncode?: boolean;
 }) {
   const rows = useMemo(() => {
+    const sorted = [...treatments].sort(
+      (a, b) => new Date(a.performed_at).getTime() - new Date(b.performed_at).getTime()
+    );
+    // Running balance: a loop rather than a mutating callback, because
+    // reassigning a closure variable inside .map trips react-hooks/immutability.
+    const out: Array<
+      TreatmentWithBranch & { charged: number; paid: number; balance: number }
+    > = [];
     let balance = 0;
-    return [...treatments]
-      .sort((a, b) => new Date(a.performed_at).getTime() - new Date(b.performed_at).getTime())
-      .map((t) => {
-        const charged = Number(t.amount_charged ?? 0);
-        const paid = Number(t.amount_paid ?? 0);
-        balance += charged - paid;
-        return { ...t, charged, paid, balance };
-      });
+    for (const t of sorted) {
+      const charged = Number(t.amount_charged ?? 0);
+      const paid = Number(t.amount_paid ?? 0);
+      balance += charged - paid;
+      out.push({ ...t, charged, paid, balance });
+    }
+    return out;
   }, [treatments]);
 
   const totalCharged = rows.reduce((sum, r) => sum + r.charged, 0);

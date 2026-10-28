@@ -1,7 +1,7 @@
 import { requireStaff } from "@/lib/security/session";
 import { listBranches } from "@/lib/queries";
 import { Callout, PageHeader } from "@/components/ui";
-import PatientIntakeForm from "@/components/patient-intake-form";
+import PatientIntakeForm from "@/components/intake/intake-form";
 import { createPatient } from "../actions";
 
 export const metadata = { title: "Register patient" };
